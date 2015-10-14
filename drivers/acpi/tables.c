@@ -292,7 +292,7 @@ void acpi_table_print_madt_entry(struct acpi_subtable_header *header)
  * GICD                  0xc                         24    24    24
  * GICv2m MSI            0xd                               24    24
  * GICR                  0xe                               16    16
- * GIC ITS               0xf                                     16
+ * GIC ITS               0xf                                     20
  *
  * In the table, each length entry is what should be in the length
  * field of the subtable, and -- in general -- it should match the
@@ -366,7 +366,7 @@ static struct acpi_madt_subtable_lengths spec_info[] = {
 		.madt_version = 3,
 		.num_types = 16,
 		.lengths = { 8, 12, 10, 8, 6, 12, 16, SUBTABLE_VARIABLE,
-			     16, 16, 12, 80, 24, 24, 16, 16 }
+			     16, 16, 12, 80, 24, 24, 16, 20 }
 	},
 	{ /* terminator */
 		.major_version = 0,
