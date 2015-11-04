@@ -51,16 +51,6 @@ int pcibios_enable_device(struct pci_dev *dev, int mask)
 	return pci_enable_resources(dev, mask);
 }
 
-/*
- * Try to assign the IRQ number from DT when adding a new device
- */
-int pcibios_add_device(struct pci_dev *dev)
-{
-	dev->irq = of_irq_parse_and_map_pci(dev, 0, 0);
-
-	return 0;
-}
-
 #ifdef CONFIG_ACPI
 /* Root bridge scanning */
 struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
