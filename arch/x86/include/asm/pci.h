@@ -12,7 +12,6 @@
 #ifdef __KERNEL__
 
 struct pci_sysdata {
-	int		domain;		/* PCI domain */
 	int		node;		/* NUMA node */
 #ifdef CONFIG_X86_64
 	void		*iommu;		/* IOMMU private data */
@@ -26,12 +25,6 @@ extern int noioapicreroute;
 #ifdef CONFIG_PCI
 
 #ifdef CONFIG_PCI_DOMAINS
-static inline int pci_domain_nr(struct pci_bus *bus)
-{
-	struct pci_sysdata *sd = bus->sysdata;
-	return sd->domain;
-}
-
 static inline int pci_proc_domain(struct pci_bus *bus)
 {
 	return pci_domain_nr(bus);

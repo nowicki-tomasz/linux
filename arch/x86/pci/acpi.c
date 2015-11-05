@@ -331,7 +331,6 @@ struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
 		 * its bus->sysdata.
 		 */
 		struct pci_sysdata sd = {
-			.domain = domain,
 			.node = node,
 		};
 
@@ -345,7 +344,6 @@ struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
 				"pci_bus %04x:%02x: ignored (out of memory)\n",
 				domain, busnum);
 		else {
-			info->sd.domain = domain;
 			info->sd.node = node;
 			bus = acpi_pci_root_create(root, &acpi_pci_root_ops,
 						   &info->common, &info->sd);

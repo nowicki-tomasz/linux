@@ -2383,6 +2383,9 @@ config PCI_DOMAINS
 	def_bool y
 	depends on PCI
 
+config PCI_DOMAINS_GENERIC
+	def_bool PCI
+
 config PCI_MMCONFIG
 	bool "Support mmconfig PCI config space access"
 	select PCI_ECAM
