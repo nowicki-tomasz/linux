@@ -129,6 +129,11 @@ extern void pci_mmcfg_arch_unmap(struct pci_mmcfg_region *cfg);
 extern int pci_mmconfig_insert(struct device *dev, u16 seg, u8 start, u8 end,
 			       phys_addr_t addr);
 
+int pci_mmcfg_read(unsigned int seg, unsigned int bus, unsigned int devfn,
+		   int reg, int len, u32 *value);
+int pci_mmcfg_write(unsigned int seg, unsigned int bus, unsigned int devfn,
+		    int reg, int len, u32 value);
+
 /*
  * On AMD Fam10h CPUs, all PCI MMIO configuration space accesses must use
  * %eax.  No other source or target registers may be used.  The following
