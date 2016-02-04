@@ -33,6 +33,9 @@ config PCI_ECAM
 config HAVE_PCI_ECAM
 	bool
 
+config GENERIC_ECAM_MAP
+	bool
+
 config PCI_DEBUG
 	bool "PCI Debugging"
 	depends on PCI && DEBUG_KERNEL
