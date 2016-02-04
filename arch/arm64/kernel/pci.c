@@ -39,16 +39,26 @@ resource_size_t pcibios_align_resource(void *data, const struct resource *res,
 }
 
 /**
- * pcibios_enable_device - Enable I/O and memory.
+ * pcibios_enable_device - Enable I/O, memory and legacy IRQs for ACPI.
  * @dev: PCI device to be enabled
  * @mask: bitmask of BARs to enable
  */
 int pcibios_enable_device(struct pci_dev *dev, int mask)
 {
+	int ret;
+
 	if (pci_has_flag(PCI_PROBE_ONLY))
 		return 0;
 
-	return pci_enable_resources(dev, mask);
+	ret = pci_enable_resources(dev, mask);
+	if (ret < 0)
+		return ret;
+
+#ifdef CONFIG_ACPI
+	if (!pci_dev_msi_enabled(dev))
+		return acpi_pci_irq_enable(dev);
+#endif
+	return 0;
 }
 
 /*
