@@ -34,6 +34,7 @@ config ARM64
 	select GENERIC_CLOCKEVENTS_BROADCAST
 	select GENERIC_CPU_AUTOPROBE
 	select GENERIC_EARLY_IOREMAP
+	select GENERIC_ECAM_MAP
 	select GENERIC_IDLE_POLL_SETUP
 	select GENERIC_IRQ_PROBE
 	select GENERIC_IRQ_SHOW
@@ -96,6 +97,7 @@ config ARM64
 	select SYSCTL_EXCEPTION_TRACE
 	select HAVE_CONTEXT_TRACKING
 	select HAVE_ARM_SMCCC
+	select HAVE_PCI_ECAM
 	help
 	  ARM 64-bit (AArch64) Linux support.
 
@@ -237,6 +239,11 @@ config PCI_SYSCALL
 source "drivers/pci/Kconfig"
 source "drivers/pci/pcie/Kconfig"
 source "drivers/pci/hotplug/Kconfig"
+
+config PCI_MMCONFIG
+	def_bool y
+	select PCI_ECAM
+	depends on ACPI
 
 endmenu
 
