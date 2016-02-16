@@ -334,7 +334,6 @@ struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
 		struct pci_sysdata sd = {
 			.domain = domain,
 			.node = node,
-			.companion = root->device
 		};
 
 		memcpy(bus->sysdata, &sd, sizeof(sd));
@@ -349,7 +348,6 @@ struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
 		else {
 			info->sd.domain = domain;
 			info->sd.node = node;
-			info->sd.companion = root->device;
 			bus = acpi_pci_root_create(root, &acpi_pci_root_ops,
 						   &info->common, &info->sd);
 		}
@@ -365,21 +363,6 @@ struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
 	}
 
 	return bus;
-}
-
-int pcibios_root_bridge_prepare(struct pci_host_bridge *bridge)
-{
-	/*
-	 * We pass NULL as parent to pci_create_root_bus(), so if it is not NULL
-	 * here, pci_create_root_bus() has been called by someone else and
-	 * sysdata is likely to be different from what we expect.  Let it go in
-	 * that case.
-	 */
-	if (!bridge->dev.parent) {
-		struct pci_sysdata *sd = bridge->bus->sysdata;
-		ACPI_COMPANION_SET(&bridge->dev, sd->companion);
-	}
-	return 0;
 }
 
 int __init pci_acpi_init(void)
