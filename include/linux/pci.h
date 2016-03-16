@@ -2033,6 +2033,16 @@ static inline bool pci_ari_enabled(struct pci_bus *bus)
 	return bus->self && bus->self->ari_enabled;
 }
 
+/* Generic ECAM mapping API */
+#ifdef CONFIG_PCI_GENERIC_ECAM
+struct pci_config_window;
+void __iomem *pci_generic_map_bus(struct pci_config_window *cfg,
+	 unsigned int busn, unsigned int devfn, int where);
+struct pci_config_window *pci_generic_map_config(phys_addr_t addr,
+	u8 bus_start, u8 bus_end, u8 bus_shift, u8 devfn_shift);
+void pci_generic_unmap_config(struct pci_config_window *cfg);
+#endif
+
 /* provide the legacy pci_dma_* API */
 #include <linux/pci-dma-compat.h>
 
