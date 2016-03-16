@@ -15,17 +15,6 @@
 
 #include "pci-host-common.h"
 
-/* Mapping is standard ECAM */
-static void __iomem *thunder_ecam_map_bus(struct pci_bus *bus,
-					  unsigned int devfn,
-					  int where)
-{
-	struct gen_pci *pci = bus->sysdata;
-	resource_size_t idx = bus->number - pci->cfg.bus_range->start;
-
-	return pci->cfg.win[idx] + ((devfn << 12) | where);
-}
-
 static void set_val(u32 v, int where, int size, u32 *val)
 {
 	int shift = (where & 3) * 8;
@@ -129,7 +118,7 @@ static int thunder_ecam_p2_config_read(struct pci_bus *bus, unsigned int devfn,
 	 * the config space access window.  Since we are working with
 	 * the high-order 32 bits, shift everything down by 32 bits.
 	 */
-	node_bits = (pci->cfg.res.start >> 32) & (1 << 12);
+	node_bits = (pci->cfgres.start >> 32) & (1 << 12);
 
 	v |= node_bits;
 	set_val(v, where, size, val);
@@ -358,19 +347,14 @@ static int thunder_ecam_config_write(struct pci_bus *bus, unsigned int devfn,
 	return pci_generic_config_write(bus, devfn, where, size, val);
 }
 
-static struct gen_pci_cfg_bus_ops thunder_ecam_bus_ops = {
-	.bus_shift	= 20,
-	.ops		= {
-		.map_bus        = thunder_ecam_map_bus,
-		.read           = thunder_ecam_config_read,
-		.write          = thunder_ecam_config_write,
-	}
+static struct pci_ops thunder_ecam_pci_ops = {
+	.map_bus        = gen_pci_map_cfg_bus,
+	.read           = thunder_ecam_config_read,
+	.write          = thunder_ecam_config_write,
 };
 
 static const struct of_device_id thunder_ecam_of_match[] = {
-	{ .compatible = "cavium,pci-host-thunder-ecam",
-	  .data = &thunder_ecam_bus_ops },
-
+	{ .compatible = "cavium,pci-host-thunder-ecam" },
 	{ },
 };
 MODULE_DEVICE_TABLE(of, thunder_ecam_of_match);
@@ -378,14 +362,13 @@ MODULE_DEVICE_TABLE(of, thunder_ecam_of_match);
 static int thunder_ecam_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	const struct of_device_id *of_id;
 	struct gen_pci *pci = devm_kzalloc(dev, sizeof(*pci), GFP_KERNEL);
 
 	if (!pci)
 		return -ENOMEM;
 
-	of_id = of_match_node(thunder_ecam_of_match, dev->of_node);
-	pci->cfg.ops = (struct gen_pci_cfg_bus_ops *)of_id->data;
+	pci->ops = &thunder_ecam_pci_ops;
+	pci->bus_shift = 20;
 
 	return pci_host_common_probe(pdev, pci);
 }

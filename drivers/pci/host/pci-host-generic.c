@@ -27,51 +27,15 @@
 
 #include "pci-host-common.h"
 
-static void __iomem *gen_pci_map_cfg_bus_cam(struct pci_bus *bus,
-					     unsigned int devfn,
-					     int where)
-{
-	struct gen_pci *pci = bus->sysdata;
-	resource_size_t idx = bus->number - pci->cfg.bus_range->start;
-
-	return pci->cfg.win[idx] + ((devfn << 8) | where);
-}
-
-static struct gen_pci_cfg_bus_ops gen_pci_cfg_cam_bus_ops = {
-	.bus_shift	= 16,
-	.ops		= {
-		.map_bus	= gen_pci_map_cfg_bus_cam,
-		.read		= pci_generic_config_read,
-		.write		= pci_generic_config_write,
-	}
-};
-
-static void __iomem *gen_pci_map_cfg_bus_ecam(struct pci_bus *bus,
-					      unsigned int devfn,
-					      int where)
-{
-	struct gen_pci *pci = bus->sysdata;
-	resource_size_t idx = bus->number - pci->cfg.bus_range->start;
-
-	return pci->cfg.win[idx] + ((devfn << 12) | where);
-}
-
-static struct gen_pci_cfg_bus_ops gen_pci_cfg_ecam_bus_ops = {
-	.bus_shift	= 20,
-	.ops		= {
-		.map_bus	= gen_pci_map_cfg_bus_ecam,
-		.read		= pci_generic_config_read,
-		.write		= pci_generic_config_write,
-	}
+static struct pci_ops gen_pci_ops = {
+	.map_bus	= gen_pci_map_cfg_bus,
+	.read		= pci_generic_config_read,
+	.write		= pci_generic_config_write,
 };
 
 static const struct of_device_id gen_pci_of_match[] = {
-	{ .compatible = "pci-host-cam-generic",
-	  .data = &gen_pci_cfg_cam_bus_ops },
-
-	{ .compatible = "pci-host-ecam-generic",
-	  .data = &gen_pci_cfg_ecam_bus_ops },
-
+	{ .compatible = "pci-host-cam-generic", .data = (void *)16},
+	{ .compatible = "pci-host-ecam-generic", .data = (void *)20},
 	{ },
 };
 MODULE_DEVICE_TABLE(of, gen_pci_of_match);
@@ -86,7 +50,8 @@ static int gen_pci_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	of_id = of_match_node(gen_pci_of_match, dev->of_node);
-	pci->cfg.ops = (struct gen_pci_cfg_bus_ops *)of_id->data;
+	pci->bus_shift = (unsigned long)of_id->data;
+	pci->ops = &gen_pci_ops;
 
 	return pci_host_common_probe(pdev, pci);
 }

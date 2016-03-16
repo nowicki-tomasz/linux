@@ -22,26 +22,19 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 
-struct gen_pci_cfg_bus_ops {
-	u32 bus_shift;
-	struct pci_ops ops;
-};
-
-struct gen_pci_cfg_windows {
-	struct resource				res;
-	struct resource				*bus_range;
-	void __iomem				**win;
-
-	struct gen_pci_cfg_bus_ops		*ops;
-};
-
 struct gen_pci {
-	struct pci_host_bridge			host;
-	struct gen_pci_cfg_windows		cfg;
-	struct list_head			resources;
+	struct pci_host_bridge		host;
+	struct resource			*bus_range;
+	unsigned int			bus_shift;
+	struct resource			cfgres;
+	struct pci_config_window	*cfg;
+	struct pci_ops			*ops;
+	struct list_head		resources;
 };
 
 int pci_host_common_probe(struct platform_device *pdev,
 			  struct gen_pci *pci);
+void __iomem *gen_pci_map_cfg_bus(struct pci_bus *bus,
+				  unsigned int devfn, int where);
 
 #endif /* _PCI_HOST_COMMON_H */

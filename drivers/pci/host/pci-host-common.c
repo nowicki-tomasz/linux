@@ -24,6 +24,14 @@
 
 #include "pci-host-common.h"
 
+void __iomem *gen_pci_map_cfg_bus(struct pci_bus *bus,
+					 unsigned int devfn, int where)
+{
+	struct gen_pci *pci = bus->sysdata;
+
+	return pci_generic_map_bus(pci->cfg, bus->number, devfn, where);
+}
+
 static void gen_pci_release_of_pci_ranges(struct gen_pci *pci)
 {
 	pci_free_resource_list(&pci->resources);
@@ -60,7 +68,7 @@ static int gen_pci_parse_request_of_pci_ranges(struct gen_pci *pci)
 			res_valid |= !(res->flags & IORESOURCE_PREFETCH);
 			break;
 		case IORESOURCE_BUS:
-			pci->cfg.bus_range = res;
+			pci->bus_range = res;
 		default:
 			continue;
 		}
@@ -83,50 +91,44 @@ out_release_res:
 	return err;
 }
 
+static void gen_pci_generic_unmap_cfg(void *ptr)
+{
+	pci_generic_unmap_config((struct pci_config_window *)ptr);
+}
+
 static int gen_pci_parse_map_cfg_windows(struct gen_pci *pci)
 {
 	int err;
-	u8 bus_max;
-	resource_size_t busn;
-	struct resource *bus_range;
+	struct resource *cfgres = &pci->cfgres;
+	struct resource *bus_range = pci->bus_range;
+	unsigned int bus_shift = pci->bus_shift;
 	struct device *dev = pci->host.dev.parent;
 	struct device_node *np = dev->of_node;
-	u32 sz = 1 << pci->cfg.ops->bus_shift;
+	struct pci_config_window *cfg;
 
-	err = of_address_to_resource(np, 0, &pci->cfg.res);
+	err = of_address_to_resource(np, 0, cfgres);
 	if (err) {
 		dev_err(dev, "missing \"reg\" property\n");
 		return err;
 	}
 
 	/* Limit the bus-range to fit within reg */
-	bus_max = pci->cfg.bus_range->start +
-		  (resource_size(&pci->cfg.res) >> pci->cfg.ops->bus_shift) - 1;
-	pci->cfg.bus_range->end = min_t(resource_size_t,
-					pci->cfg.bus_range->end, bus_max);
+	bus_range->end = min(bus_range->end,
+		bus_range->start + (resource_size(cfgres) >> bus_shift) - 1);
 
-	pci->cfg.win = devm_kcalloc(dev, resource_size(pci->cfg.bus_range),
-				    sizeof(*pci->cfg.win), GFP_KERNEL);
-	if (!pci->cfg.win)
-		return -ENOMEM;
+	cfg = pci_generic_map_config(cfgres->start, bus_range->start,
+				     bus_range->end, bus_shift, bus_shift - 8);
 
-	/* Map our Configuration Space windows */
-	if (!devm_request_mem_region(dev, pci->cfg.res.start,
-				     resource_size(&pci->cfg.res),
-				     "Configuration Space"))
-		return -ENOMEM;
+	if (IS_ERR(cfg))
+		return PTR_ERR(cfg);
 
-	bus_range = pci->cfg.bus_range;
-	for (busn = bus_range->start; busn <= bus_range->end; ++busn) {
-		u32 idx = busn - bus_range->start;
-
-		pci->cfg.win[idx] = devm_ioremap(dev,
-						 pci->cfg.res.start + idx * sz,
-						 sz);
-		if (!pci->cfg.win[idx])
-			return -ENOMEM;
+	err = devm_add_action(dev, gen_pci_generic_unmap_cfg, cfg);
+	if (err) {
+		gen_pci_generic_unmap_cfg(cfg);
+		return err;
 	}
 
+	pci->cfg = cfg;
 	return 0;
 }
 
@@ -168,8 +170,8 @@ int pci_host_common_probe(struct platform_device *pdev,
 		pci_add_flags(PCI_REASSIGN_ALL_RSRC | PCI_REASSIGN_ALL_BUS);
 
 
-	bus = pci_scan_root_bus(dev, pci->cfg.bus_range->start,
-				&pci->cfg.ops->ops, pci, &pci->resources);
+	bus = pci_scan_root_bus(dev, pci->bus_range->start,
+				pci->ops, pci, &pci->resources);
 	if (!bus) {
 		dev_err(dev, "Scanning rootbus failed");
 		return -ENODEV;
