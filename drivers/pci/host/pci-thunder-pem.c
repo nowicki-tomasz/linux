@@ -14,10 +14,12 @@
  * Copyright (C) 2015 - 2016 Cavium, Inc.
  */
 
+#include <linux/acpi.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of_address.h>
 #include <linux/of_pci.h>
+#include <linux/pci-acpi.h>
 #include <linux/platform_device.h>
 
 #include "pci-host-common.h"
@@ -339,6 +341,177 @@ static struct platform_driver thunder_pem_driver = {
 	.probe = thunder_pem_probe,
 };
 module_platform_driver(thunder_pem_driver);
+
+#ifdef	CONFIG_ACPI
+
+#define PEM_CFG_NORMAL_IDX	0
+#define PEM_CFG_ROOT_IDX	1
+#define PEM_CFG_REGIONS_MAX	2
+
+struct acpi_thunder_pem {
+	int count;
+	struct resource	resource[PEM_CFG_REGIONS_MAX];
+};
+
+static acpi_status
+thunder_pem_cfg(struct acpi_resource *resource, void *ctx)
+{
+	struct acpi_thunder_pem *pem_ctx = ctx;
+	struct resource *res = &pem_ctx->resource[pem_ctx->count];
+
+	if ((resource->type != ACPI_RESOURCE_TYPE_ADDRESS64) ||
+	    (resource->data.address32.resource_type != ACPI_MEMORY_RANGE))
+		return AE_OK;
+
+	res->start = resource->data.address64.address.minimum;
+	res->end = resource->data.address64.address.maximum;
+	res->flags = IORESOURCE_MEM;
+
+	pem_ctx->count++;
+	return AE_OK;
+}
+
+static acpi_status
+thunder_pem_find_dev(acpi_handle handle, u32 level, void *ctx, void **ret)
+{
+	struct acpi_thunder_pem *pem_ctx = ctx;
+	struct acpi_device_info *info;
+	acpi_status status = AE_OK;
+
+	status = acpi_get_object_info(handle, &info);
+	if (ACPI_FAILURE(status))
+		return AE_OK;
+
+	if (strncmp(info->hardware_id.string, "THRX0001", 8) != 0)
+		goto out;
+
+	pem_ctx->count = 0;
+	status = acpi_walk_resources(handle, METHOD_NAME__CRS, thunder_pem_cfg,
+				     pem_ctx);
+	if (ACPI_FAILURE(status))
+		goto out;
+
+	if (pem_ctx->count == PEM_CFG_REGIONS_MAX)
+		status = AE_CTRL_TERMINATE;
+out:
+	kfree(info);
+	return status;
+}
+
+static int thunder_pem_init_info(struct acpi_pci_root_info *ci)
+{
+	struct acpi_pci_root *root = ci->root;
+	acpi_handle handle = acpi_device_handle(root->device);
+	struct device *dev = &root->device->dev;
+	struct gen_pci *pci = root->sysdata;
+	u16 seg = root->segment;
+	u8 bus_start = root->secondary.start;
+	u8 bus_end = root->secondary.end;
+	struct thunder_pem_pci *pem_pci;
+	struct acpi_thunder_pem pem_ctx;
+	struct resource *res_pem;
+	acpi_status status;
+	int ret;
+
+	pem_pci = container_of(pci, struct thunder_pem_pci, gen_pci);
+
+	/*
+	 * Get PCI CFG regions:
+	 * res[PEM_CFG_ROOT_IDX] -> root bus CFG region
+	 * res[PEM_CFG_NORMAL_IDX] -> all other buses/devices CFG regions
+	 */
+	status = acpi_walk_namespace(ACPI_TYPE_DEVICE, handle, 1,
+				     thunder_pem_find_dev, NULL, &pem_ctx, NULL);
+	if (ACPI_FAILURE(status) || pem_ctx.count != PEM_CFG_REGIONS_MAX) {
+		ret = -ENOENT;
+		goto out_err;
+	}
+
+	res_pem = &pem_ctx.resource[PEM_CFG_NORMAL_IDX];
+	pci->bus_range = &root->secondary;
+	pci->cfg = pci_generic_map_config(res_pem->start, bus_start, bus_end,
+					  24, 12);
+	if (IS_ERR(pci->cfg)) {
+		ret = PTR_ERR(pci->cfg);
+		goto out_err;
+	}
+
+	res_pem = &pem_ctx.resource[PEM_CFG_ROOT_IDX];
+	ret = thunder_pem_init(dev, pem_pci, res_pem);
+	if (ret)
+		goto out_err;
+
+	dev_info(dev, "ThunderX PEM [%04x:%02x-%02x] CFG regions initialized\n",
+		 seg, bus_start, bus_end);
+	return 0;
+out_err:
+	dev_err(dev, "PEM [%04x:%02x-%02x] init failure, error (%d)\n",
+		seg, bus_start, bus_end, ret);
+	return ret;
+}
+
+static void thunder_pem_release_info(struct acpi_pci_root_info *ci)
+{
+	struct gen_pci *pci = ci->root->sysdata;
+	struct thunder_pem_pci *pem_pci;
+
+	pci_generic_unmap_config(pci->cfg);
+	pem_pci = container_of(pci, struct thunder_pem_pci, gen_pci);
+	devm_iounmap(&ci->root->device->dev, pem_pci->pem_reg_base);
+	kfree(pem_pci);
+	kfree(ci);
+}
+
+static struct acpi_pci_root_ops thunder_pem_root_ops = {
+	.pci_ops = &thunder_pem_pci_ops,
+	.init_info = thunder_pem_init_info,
+	.release_info = thunder_pem_release_info,
+};
+
+static int check_cavium_thunderx(struct pci_cfg_fixup *fixup,
+				 struct acpi_pci_root *root)
+{
+	struct device *dev = &root->device->dev;
+	u32 midr = read_cpuid_id();
+	struct thunder_pem_pci *pem_pci;
+
+	if ((MIDR_IMPLEMENTOR(midr) != ARM_CPU_IMP_CAVIUM) ||
+	    (MIDR_PARTNUM(midr) != CAVIUM_CPU_PART_THUNDERX))
+		return false;
+
+	pem_pci = devm_kzalloc(dev, sizeof(*pem_pci), GFP_KERNEL);
+	if (!pem_pci)
+		return -ENOMEM;
+
+	root->sysdata = &pem_pci->gen_pci;
+	return true;
+}
+
+DECLARE_ACPI_MCFG_FIXUP(NULL, check_cavium_thunderx, &thunder_pem_root_ops,
+			4, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, check_cavium_thunderx, &thunder_pem_root_ops,
+			5, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, check_cavium_thunderx, &thunder_pem_root_ops,
+			6, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, check_cavium_thunderx, &thunder_pem_root_ops,
+			7, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, check_cavium_thunderx, &thunder_pem_root_ops,
+			8, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, check_cavium_thunderx, &thunder_pem_root_ops,
+			9, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, check_cavium_thunderx, &thunder_pem_root_ops,
+			14, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, check_cavium_thunderx, &thunder_pem_root_ops,
+			15, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, check_cavium_thunderx, &thunder_pem_root_ops,
+			16, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, check_cavium_thunderx, &thunder_pem_root_ops,
+			17, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, check_cavium_thunderx, &thunder_pem_root_ops,
+			18, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, check_cavium_thunderx, &thunder_pem_root_ops,
+			19, PCI_MCFG_BUS_ANY);
+#endif
 
 MODULE_DESCRIPTION("Thunder PEM PCIe host driver");
 MODULE_LICENSE("GPL v2");
