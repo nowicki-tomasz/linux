@@ -644,7 +644,7 @@ struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
 	}
 
 	acpi_pci_root_ops.pci_ops = pci_mcfg_get_ops(root);
-	bus = acpi_pci_root_create(root, &acpi_pci_root_ops, info, root);
+	bus = acpi_pci_root_create(root, &acpi_pci_root_ops, info, root->sysdata);
 	if (!bus)
 		return NULL;
 
