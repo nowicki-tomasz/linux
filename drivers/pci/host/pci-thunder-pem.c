@@ -275,12 +275,36 @@ static const struct of_device_id thunder_pem_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, thunder_pem_of_match);
 
+static int thunder_pem_init(struct device *dev,
+			     struct thunder_pem_pci *pem_pci,
+			     struct resource *res_pem)
+{
+	resource_size_t bar4_start;
+
+	pem_pci->pem_reg_base = devm_ioremap(dev, res_pem->start, 0x10000);
+	if (!pem_pci->pem_reg_base)
+		return -ENOMEM;
+
+	/*
+	 * The MSI-X BAR for the PEM and AER interrupts is located at
+	 * a fixed offset from the PEM register base.  Generate a
+	 * fragment of the synthesized Enhanced Allocation capability
+	 * structure here for the BAR.
+	 */
+	bar4_start = res_pem->start + 0xf00000;
+	pem_pci->ea_entry[0] = (u32)bar4_start | 2;
+	pem_pci->ea_entry[1] = (u32)(res_pem->end - bar4_start) & ~3u;
+	pem_pci->ea_entry[2] = (u32)(bar4_start >> 32);
+
+	return 0;
+}
+
 static int thunder_pem_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	resource_size_t bar4_start;
 	struct resource *res_pem;
 	struct thunder_pem_pci *pem_pci;
+	int ret;
 
 	pem_pci = devm_kzalloc(dev, sizeof(*pem_pci), GFP_KERNEL);
 	if (!pem_pci)
@@ -300,20 +324,9 @@ static int thunder_pem_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	pem_pci->pem_reg_base = devm_ioremap(dev, res_pem->start, 0x10000);
-	if (!pem_pci->pem_reg_base)
-		return -ENOMEM;
-
-	/*
-	 * The MSI-X BAR for the PEM and AER interrupts is located at
-	 * a fixed offset from the PEM register base.  Generate a
-	 * fragment of the synthesized Enhanced Allocation capability
-	 * structure here for the BAR.
-	 */
-	bar4_start = res_pem->start + 0xf00000;
-	pem_pci->ea_entry[0] = (u32)bar4_start | 2;
-	pem_pci->ea_entry[1] = (u32)(res_pem->end - bar4_start) & ~3u;
-	pem_pci->ea_entry[2] = (u32)(bar4_start >> 32);
+	ret = thunder_pem_init(dev, pem_pci, res_pem);
+	if (ret)
+		return ret;
 
 	return pci_host_common_probe(pdev, &pem_pci->gen_pci);
 }
