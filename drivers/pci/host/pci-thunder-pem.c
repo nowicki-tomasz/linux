@@ -15,10 +15,12 @@
  *
  */
 
+#include <linux/acpi.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of_address.h>
 #include <linux/of_pci.h>
+#include <linux/pci-acpi.h>
 #include <linux/platform_device.h>
 
 #include "pci-host-common.h"
@@ -355,6 +357,140 @@ static struct platform_driver thunder_pem_driver = {
 	.probe = thunder_pem_probe,
 };
 module_platform_driver(thunder_pem_driver);
+
+#ifdef	CONFIG_PCI_MMCONFIG
+
+#define PEM_CFG_NORMAL_IDX	0
+#define PEM_CFG_ROOT_IDX	1
+#define PEM_CFG_REGIONS_MAX	2
+
+struct acpi_thunder_pem {
+	int count;
+	struct resource	resource[PEM_CFG_REGIONS_MAX];
+};
+
+static acpi_status
+thunder_pem_cfg(struct acpi_resource *resource, void *ctx)
+{
+	struct acpi_thunder_pem *pem_ctx = ctx;
+	struct resource *res = &pem_ctx->resource[pem_ctx->count];
+
+	if ((resource->type != ACPI_RESOURCE_TYPE_ADDRESS64) ||
+	    (resource->data.address32.resource_type != ACPI_MEMORY_RANGE))
+		return AE_OK;
+
+	res->start = resource->data.address64.address.minimum;
+	res->end = resource->data.address64.address.maximum;
+	res->flags = IORESOURCE_MEM;
+
+	pem_ctx->count++;
+	return AE_OK;
+}
+
+static acpi_status
+thunder_pem_find_dev(acpi_handle handle, u32 level, void *ctx, void **ret)
+{
+	struct acpi_thunder_pem *pem_ctx = ctx;
+	struct acpi_device_info *info;
+	acpi_status status = AE_OK;
+
+	status = acpi_get_object_info(handle, &info);
+	if (ACPI_FAILURE(status))
+		return AE_OK;
+
+	if (strncmp(info->hardware_id.string, "THRX0001", 8) != 0)
+		goto out;
+
+	pem_ctx->count = 0;
+	status = acpi_walk_resources(handle, METHOD_NAME__CRS, thunder_pem_cfg,
+				     pem_ctx);
+	if (ACPI_FAILURE(status))
+		goto out;
+
+	if (pem_ctx->count == PEM_CFG_REGIONS_MAX)
+		status = AE_CTRL_TERMINATE;
+out:
+	kfree(info);
+	return status;
+}
+
+static int thunder_pem_generic_init(struct acpi_pci_root *root,
+				    struct device *dev,
+				    struct thunder_pem_pci *pem_pci,
+				    struct resource *res_pem)
+{
+	struct resource *bus_range;
+	struct gen_pci *pci;
+	resource_size_t busn;
+	u32 sz = 1 << 24;
+
+	pci = &pem_pci->gen_pci;
+	bus_range = pci->cfg.bus_range = &root->secondary;
+	pci->cfg.win = devm_kcalloc(dev, resource_size(bus_range),
+				    sizeof(*pci->cfg.win), GFP_KERNEL);
+	if (!pci->cfg.win)
+		return -ENOMEM;
+
+	for (busn = bus_range->start; busn <= bus_range->end; ++busn) {
+		u32 idx = busn - bus_range->start;
+
+		pci->cfg.win[idx] = devm_ioremap(dev, res_pem->start + idx * sz,
+						 sz);
+		if (!pci->cfg.win[idx])
+			return -ENOMEM;
+	}
+
+	return 0;
+}
+
+static int check_cavium_thunderx(struct pci_mcfg_fixup *fixup,
+				      struct acpi_pci_root *root)
+{
+	acpi_handle handle = acpi_device_handle(root->device);
+	struct device *dev = &root->device->dev;
+	u32 midr = read_cpuid_id();
+	struct thunder_pem_pci *pem_pci;
+	struct acpi_thunder_pem pem_ctx;
+	struct resource *res_pem;
+	acpi_status status;
+	int ret;
+
+	if ((MIDR_IMPLEMENTOR(midr) != ARM_CPU_IMP_CAVIUM) ||
+	    (MIDR_PARTNUM(midr) != CAVIUM_CPU_PART_THUNDERX))
+		return false;
+
+	/*
+	 * Get PCI CFG regions:
+	 * res[1] -> root bus CFG region
+	 * res[0] -> all other bus/device CFG regions
+	 */
+	status = acpi_walk_namespace(ACPI_TYPE_DEVICE, handle, 1,
+				     thunder_pem_find_dev, NULL, &pem_ctx, NULL);
+	if (ACPI_FAILURE(status) || pem_ctx.count != PEM_CFG_REGIONS_MAX)
+		return false;
+
+	pem_pci = devm_kzalloc(dev, sizeof(*pem_pci), GFP_KERNEL);
+	if (!pem_pci)
+		return false;
+
+	res_pem = &pem_ctx.resource[PEM_CFG_NORMAL_IDX];
+	ret = thunder_pem_generic_init(root, dev, pem_pci, res_pem);
+	if (ret)
+		return false;
+
+	res_pem = &pem_ctx.resource[PEM_CFG_ROOT_IDX];
+	ret = thunder_pem_init(dev, pem_pci, res_pem);
+	if (ret)
+		return false;
+
+	root->sysdata = &pem_pci->gen_pci;
+	dev_info(&root->device->dev, "ThunderX PEM CFG regions initialized\n");
+	return true;
+}
+
+DECLARE_ACPI_MCFG_FIXUP(NULL, check_cavium_thunderx, &thunder_pem_bus_ops.ops,
+			PCI_MCFG_DOMAIN_ANY, PCI_MCFG_BUS_ANY);
+#endif
 
 MODULE_DESCRIPTION("Thunder PEM PCIe host driver");
 MODULE_LICENSE("GPL v2");
