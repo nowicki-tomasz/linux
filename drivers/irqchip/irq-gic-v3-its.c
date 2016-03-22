@@ -815,7 +815,7 @@ static void its_free_tables(struct its_node *its)
 	}
 }
 
-static int its_alloc_tables(const char *node_name, struct its_node *its)
+static int its_alloc_tables(struct its_node *its)
 {
 	int err;
 	int i;
@@ -869,8 +869,8 @@ static int its_alloc_tables(const char *node_name, struct its_node *its)
 				    order);
 			if (order >= MAX_ORDER) {
 				order = MAX_ORDER - 1;
-				pr_warn("%s: Device Table too large, reduce its page order to %u\n",
-					node_name, order);
+				pr_warn("ITS@0x%lx: Device Table too large, reduce its page order to %u\n",
+					its->phys_base, order);
 			}
 		}
 
@@ -879,8 +879,8 @@ retry_alloc_baser:
 		if (alloc_pages > GITS_BASER_PAGES_MAX) {
 			alloc_pages = GITS_BASER_PAGES_MAX;
 			order = get_order(GITS_BASER_PAGES_MAX * psz);
-			pr_warn("%s: Device Table too large, reduce its page order to %u (%u pages)\n",
-				node_name, order, alloc_pages);
+			pr_warn("ITS@0x%lx: Device Table too large, reduce its page order to %u (%u pages)\n",
+				its->phys_base, order, alloc_pages);
 		}
 
 		base = (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, order);
@@ -953,8 +953,8 @@ retry_baser:
 		}
 
 		if (val != tmp) {
-			pr_err("ITS: %s: GITS_BASER%d doesn't stick: %lx %lx\n",
-			       node_name, i,
+			pr_err("ITS@0x%lx: GITS_BASER%d doesn't stick: %lx %lx\n",
+			       its->phys_base, i,
 			       (unsigned long) val, (unsigned long) tmp);
 			err = -ENXIO;
 			goto out_free;
@@ -1429,7 +1429,7 @@ static void its_enable_quirks(struct its_node *its)
 	gic_enable_quirks(iidr, its_quirks, its);
 }
 
-static int its_init_domain(struct device_node *node, struct its_node *its,
+static int its_init_domain(struct fwnode_handle *handler, struct its_node *its,
 			   struct irq_domain *parent)
 {
 	struct irq_domain *inner_domain;
@@ -1439,7 +1439,7 @@ static int its_init_domain(struct device_node *node, struct its_node *its,
 	if (!info)
 		return -ENOMEM;
 
-	inner_domain = irq_domain_add_tree(node, &its_domain_ops, its);
+	inner_domain = irq_domain_create_tree(handler, &its_domain_ops, its);
 	if (!inner_domain) {
 		kfree(info);
 		return -ENOMEM;
@@ -1454,43 +1454,39 @@ static int its_init_domain(struct device_node *node, struct its_node *its,
 	return 0;
 }
 
-static int __init its_probe(struct device_node *node,
-			    struct irq_domain *parent)
+static int __init its_probe_one(phys_addr_t phys_base, unsigned long size,
+				struct irq_domain *parent,
+				struct fwnode_handle *handler)
 {
-	struct resource res;
 	struct its_node *its;
 	void __iomem *its_base;
 	u32 val;
 	u64 baser, tmp;
 	int err;
 
-	err = of_address_to_resource(node, 0, &res);
-	if (err) {
-		pr_warn("%s: no regs?\n", node->full_name);
-		return -ENXIO;
-	}
-
-	its_base = ioremap(res.start, resource_size(&res));
+	its_base = ioremap(phys_base, size);
 	if (!its_base) {
-		pr_warn("%s: unable to map registers\n", node->full_name);
+		pr_warn("ITS@0x%lx: Unable to map ITS registers\n",
+			(long)phys_base);
 		return -ENOMEM;
 	}
 
 	val = readl_relaxed(its_base + GITS_PIDR2) & GIC_PIDR2_ARCH_MASK;
 	if (val != 0x30 && val != 0x40) {
-		pr_warn("%s: no ITS detected, giving up\n", node->full_name);
+		pr_warn("ITS@0x%lx: No ITS detected, giving up\n",
+			(long)phys_base);
 		err = -ENODEV;
 		goto out_unmap;
 	}
 
 	err = its_force_quiescent(its_base);
 	if (err) {
-		pr_warn("%s: failed to quiesce, giving up\n",
-			node->full_name);
+		pr_warn("ITS@0x%lx: Failed to quiesce, giving up\n",
+			(long)phys_base);
 		goto out_unmap;
 	}
 
-	pr_info("ITS: %s\n", node->full_name);
+	pr_info("ITS@0x%lx\n", (long)phys_base);
 
 	its = kzalloc(sizeof(*its), GFP_KERNEL);
 	if (!its) {
@@ -1502,7 +1498,7 @@ static int __init its_probe(struct device_node *node,
 	INIT_LIST_HEAD(&its->entry);
 	INIT_LIST_HEAD(&its->its_device_list);
 	its->base = its_base;
-	its->phys_base = res.start;
+	its->phys_base = phys_base;
 	its->ite_size = ((readl_relaxed(its_base + GITS_TYPER) >> 4) & 0xf) + 1;
 
 	its->cmd_base = kzalloc(ITS_CMD_QUEUE_SZ, GFP_KERNEL);
@@ -1514,7 +1510,7 @@ static int __init its_probe(struct device_node *node,
 
 	its_enable_quirks(its);
 
-	err = its_alloc_tables(node->full_name, its);
+	err = its_alloc_tables(its);
 	if (err)
 		goto out_free_cmd;
 
@@ -1550,7 +1546,7 @@ static int __init its_probe(struct device_node *node,
 	writeq_relaxed(0, its->base + GITS_CWRITER);
 	writel_relaxed(GITS_CTLR_ENABLE, its->base + GITS_CTLR);
 
-	err = its_init_domain(node, its, parent);
+	err = its_init_domain(handler, its, parent);
 	if (err)
 		goto out_free_tables;
 
@@ -1568,7 +1564,7 @@ out_free_its:
 	kfree(its);
 out_unmap:
 	iounmap(its_base);
-	pr_err("ITS: failed probing %s (%d)\n", node->full_name, err);
+	pr_err("ITS@0x%lx: failed probing (%d)\n", (long)phys_base, err);
 	return err;
 }
 
@@ -1596,10 +1592,11 @@ static struct of_device_id its_device_id[] = {
 	{},
 };
 
-int __init its_init(struct device_node *node, struct rdists *rdists,
-	     struct irq_domain *parent_domain)
+static int __init
+its_of_probe(struct device_node *node, struct irq_domain *parent)
 {
 	struct device_node *np;
+	struct resource res;
 
 	for (np = of_find_matching_node(node, its_device_id); np;
 	     np = of_find_matching_node(np, its_device_id)) {
@@ -1609,8 +1606,25 @@ int __init its_init(struct device_node *node, struct rdists *rdists,
 			continue;
 		}
 
-		its_probe(np, parent_domain);
+		if (of_address_to_resource(np, 0, &res)) {
+			pr_warn("%s: no regs?\n", np->full_name);
+			continue;
+		}
+
+		its_probe_one(res.start, resource_size(&res), parent,
+			      &np->fwnode);
 	}
+	return 0;
+}
+
+int __init its_init(struct fwnode_handle *handle, struct rdists *rdists,
+		    struct irq_domain *parent_domain)
+{
+	struct device_node *of_node;
+
+	of_node = to_of_node(handle);
+	if (of_node)
+		its_of_probe(of_node, parent_domain);
 
 	if (list_empty(&its_nodes)) {
 		pr_warn("ITS: No ITS available, not enabling LPIs\n");
