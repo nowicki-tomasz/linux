@@ -1976,9 +1976,20 @@ struct irq_domain *pci_host_bridge_acpi_msi_domain(struct pci_bus *bus);
 
 void
 pci_msi_register_fwnode_provider(struct fwnode_handle *(*fn)(struct device *));
+u32 pci_acpi_msi_domain_get_msi_rid(struct pci_dev *pdev, u32 rid_in);
+void pci_acpi_register_msi_rid_mapper(u32 (*fn)(struct pci_dev *, u32));
+struct irq_domain *
+pci_acpi_msi_get_device_domain(struct pci_dev *pdev, u32 rid);
+void pci_acpi_register_dev_msi_fwnode_provider(
+			struct fwnode_handle *(*fn)(struct pci_dev *, u32));
 #else
 static inline struct irq_domain *
 pci_host_bridge_acpi_msi_domain(struct pci_bus *bus) { return NULL; }
+static inline u32
+pci_acpi_msi_domain_get_msi_rid(struct pci_dev *pdev, u32 rid_in)
+{ return rid_in; }
+static inline struct irq_domain *
+pci_acpi_msi_get_device_domain(struct pci_dev *pdev, u32 rid) { return NULL; }
 #endif
 
 #ifdef CONFIG_EEH

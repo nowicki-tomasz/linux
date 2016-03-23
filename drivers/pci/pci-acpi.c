@@ -731,6 +731,83 @@ struct irq_domain *pci_host_bridge_acpi_msi_domain(struct pci_bus *bus)
 	return irq_find_matching_fwnode(fwnode, DOMAIN_BUS_PCI_MSI);
 }
 
+static u32 (*pci_msi_map_dev_rid_cb)(struct pci_dev *pdev, u32 req_id);
+
+/**
+ * pci_acpi_register_msi_rid_mapper - Register callback to map the MSI
+ * requester id (RID)
+ * @fn:       Callback mapping a PCI device RID.
+ *
+ * This should be called by irqchip driver, which can provide firmware-defined
+ * topologies about MSI requester id (RID) on a per-device basis.
+ */
+void pci_acpi_register_msi_rid_mapper(u32 (*fn)(struct pci_dev *, u32))
+{
+	pci_msi_map_dev_rid_cb = fn;
+}
+
+/**
+ * pci_acpi_msi_domain_get_msi_rid - Get the MSI requester id (RID) of
+ * a PCI device
+ * @pdev:     The PCI device.
+ * @rid_in:   The PCI device request ID.
+ *
+ * This function uses the callback function registered by
+ * pci_acpi_register_msi_rid_mapper() to get the device RID based on ACPI
+ * supplied mapping.
+ * This should return rid_in on error or when there is no valid map.
+ */
+u32 pci_acpi_msi_domain_get_msi_rid(struct pci_dev *pdev, u32 rid_in)
+{
+	if (!pci_msi_map_dev_rid_cb)
+		return rid_in;
+
+	return pci_msi_map_dev_rid_cb(pdev, rid_in);
+}
+
+static struct fwnode_handle *(*pci_msi_get_dev_fwnode_cb)(struct pci_dev *pdev,
+							  u32 req_id);
+
+/**
+ * pci_acpi_register_dev_msi_fwnode_provider - Register callback to retrieve
+ * domain fwnode on the per-device basis
+ * @fn:       Callback matching a device to a fwnode that identifies a PCI
+ *            MSI domain.
+ *
+ * This should be called by irqchip driver, which can provide firmware-defined
+ * topologies about which MSI controller to use on a per-device basis.
+ */
+void
+pci_acpi_register_dev_msi_fwnode_provider(
+			struct fwnode_handle *(*fn)(struct pci_dev *, u32))
+{
+	pci_msi_get_dev_fwnode_cb = fn;
+}
+
+/**
+ * pci_acpi_msi_get_device_domain - Retrieve MSI domain of a PCI device
+ * @pdev:     The PCI device.
+ * @rid:      The PCI device requester ID.
+ *
+ * This function uses the callback function registered by
+ * pci_acpi_register_dev_msi_fwnode_provider() to retrieve the irq_domain with
+ * type DOMAIN_BUS_PCI_MSI of the specified PCI device.
+ * This returns NULL on error or when the domain is not found.
+ */
+struct irq_domain *pci_acpi_msi_get_device_domain(struct pci_dev *pdev, u32 rid)
+{
+	struct fwnode_handle *fwnode;
+
+	if (!pci_msi_get_dev_fwnode_cb)
+		return NULL;
+
+	fwnode = pci_msi_get_dev_fwnode_cb(pdev, rid);
+	if (!fwnode)
+		return NULL;
+
+	return irq_find_matching_fwnode(fwnode, DOMAIN_BUS_PCI_MSI);
+}
+
 static int __init acpi_pci_init(void)
 {
 	int ret;
