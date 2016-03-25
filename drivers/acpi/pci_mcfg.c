@@ -41,6 +41,32 @@ int __weak raw_pci_write(unsigned int domain, unsigned int bus,
 	return PCIBIOS_DEVICE_NOT_FOUND;
 }
 
+void __iomem *
+pci_mcfg_dev_base(struct pci_bus *bus, unsigned int devfn, int offset)
+{
+	struct acpi_pci_root *root = bus->sysdata;
+	struct pci_mmcfg_region *mcfg = root->mcfg;
+
+	return mcfg->virt + PCI_MMCFG_OFFSET(bus->number, devfn) + offset;
+}
+
+/* Default generic PCI config accessors */
+static struct pci_ops pci_mcfg_ops = {
+	.map_bus = pci_mcfg_dev_base,
+	.read = pci_generic_config_read,
+	.write = pci_generic_config_write,
+};
+
+struct pci_ops *pci_mcfg_get_ops(struct acpi_pci_root *root)
+{
+	/*
+	 * TODO: Match against platform specific quirks and return
+	 * corresponding PCI config space accessor set.
+	 */
+
+	return &pci_mcfg_ops;
+}
+
 static void list_add_sorted(struct pci_mmcfg_region *new)
 {
 	struct pci_mmcfg_region *cfg;

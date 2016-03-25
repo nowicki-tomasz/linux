@@ -560,6 +560,7 @@ struct acpi_pci_root {
 	u32 osc_support_set;	/* _OSC state of support bits */
 	u32 osc_control_set;	/* _OSC state of control bits */
 	phys_addr_t mcfg_addr;
+	struct pci_mmcfg_region *mcfg;
 };
 
 /* helper */
