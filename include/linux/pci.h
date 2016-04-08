@@ -1728,6 +1728,17 @@ static inline void pci_mmcfg_early_init(void) { }
 static inline void pci_mmcfg_late_init(void) { }
 #endif
 
+#ifdef CONFIG_PCI_GENERIC_MCFG
+struct acpi_pci_root;
+void __init pci_mcfg_init(void);
+struct acpi_pci_root_ops *pci_mcfg_get_init(struct acpi_pci_root *root);
+#else
+struct acpi_pci_root;
+static inline void pci_mcfg_init(void) { }
+static inline struct acpi_pci_root_ops *
+pci_mcfg_get_init(struct acpi_pci_root *root) { return NULL; }
+#endif
+
 int pci_ext_cfg_avail(void);
 
 void __iomem *pci_ioremap_bar(struct pci_dev *pdev, int bar);

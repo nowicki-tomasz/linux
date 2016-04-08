@@ -532,6 +532,39 @@ static void negotiate_os_control(struct acpi_pci_root *root, int *no_aspm)
 	}
 }
 
+#ifdef CONFIG_ACPI_PCI_HOST_GENERIC
+
+/* Interface called from ACPI code to setup PCI host controller */
+struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
+{
+	int node = acpi_get_node(root->device->handle);
+	struct acpi_pci_root_ops *root_ops;
+	struct acpi_pci_root_info *info;
+	struct pci_bus *bus, *child;
+
+	info = kzalloc_node(sizeof(*info), GFP_KERNEL, node);
+	if (!info)
+		return NULL;
+
+	root_ops = pci_mcfg_get_init(root);
+	if (!root_ops)
+		return NULL;
+
+	bus = acpi_pci_root_create(root, root_ops, info, root->sysdata);
+	if (!bus)
+		return NULL;
+
+	pci_bus_size_bridges(bus);
+	pci_bus_assign_resources(bus);
+
+	list_for_each_entry(child, &bus->children, node)
+		pcie_bus_configure_settings(child);
+
+	return bus;
+}
+
+#endif /* CONFIG_ACPI_PCI_HOST_GENERIC */
+
 static int acpi_pci_root_add(struct acpi_device *device,
 			     const struct acpi_device_id *not_used)
 {
