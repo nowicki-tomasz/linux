@@ -534,6 +534,33 @@ static void negotiate_os_control(struct acpi_pci_root *root, int *no_aspm)
 
 #ifdef CONFIG_ACPI_PCI_HOST_GENERIC
 
+extern struct pci_cfg_fixup __start_acpi_mcfg_fixups[];
+extern struct pci_cfg_fixup __end_acpi_mcfg_fixups[];
+
+static struct acpi_pci_root_ops *pci_acpi_get_ops(struct acpi_pci_root *root)
+{
+	int bus_num = root->secondary.start;
+	int domain = root->segment;
+	struct pci_cfg_fixup *f;
+
+	/*
+	 * Match against platform specific quirks and return corresponding
+	 * PCI init structure.
+	 *
+	 * First match against PCI topology <domain:bus> then use DMI or
+	 * custom match handler.
+	 */
+	for (f = __start_acpi_mcfg_fixups; f < __end_acpi_mcfg_fixups; f++) {
+		if ((f->domain == domain || f->domain == PCI_MCFG_DOMAIN_ANY) &&
+		    (f->bus_num == bus_num || f->bus_num == PCI_MCFG_BUS_ANY) &&
+		    (f->system ? dmi_check_system(f->system) : 1) &&
+		    (f->match ? f->match(f, root) : 1))
+			return f->ops;
+	}
+	/* No quirks, use MCFG */
+	return pci_mcfg_get_init(root);
+}
+
 /* Interface called from ACPI code to setup PCI host controller */
 struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
 {
@@ -546,7 +573,7 @@ struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
 	if (!info)
 		return NULL;
 
-	root_ops = pci_mcfg_get_init(root);
+	root_ops = pci_acpi_get_ops(root);
 	if (!root_ops)
 		return NULL;
 
