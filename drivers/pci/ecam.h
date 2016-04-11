@@ -58,4 +58,9 @@ void __iomem *pci_generic_ecam_map_bus(struct pci_bus *bus, unsigned int devfn,
 /* default ECAM ops, bus shift 20, generic read and write */
 extern struct pci_generic_ecam_ops pci_generic_ecam_default_ops;
 
+#ifdef CONFIG_PCI_HOST_GENERIC
+/* for DT based pci controllers that support ECAM */
+int pci_host_common_probe(struct platform_device *pdev,
+			  struct pci_generic_ecam_ops *ops);
+#endif
 #endif
