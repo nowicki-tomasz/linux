@@ -1729,6 +1729,12 @@ static inline void pci_mmcfg_early_init(void) { }
 static inline void pci_mmcfg_late_init(void) { }
 #endif
 
+#ifdef CONFIG_ACPI_PCI_HOST_GENERIC
+void __init pci_mcfg_init(void);
+#else
+static inline void pci_mcfg_init(void) { return; }
+#endif
+
 int pci_ext_cfg_avail(void);
 
 void __iomem *pci_ioremap_bar(struct pci_dev *pdev, int bar);
