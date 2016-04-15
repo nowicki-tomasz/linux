@@ -11,9 +11,13 @@
 #include <linux/ioport.h>
 #include <linux/of_pci.h>
 #include <linux/of.h>
+#include <linux/pci-acpi.h>
 #include <linux/platform_device.h>
 
+#include <asm/virt.h>
+
 #include "../ecam.h"
+
 
 static void set_val(u32 v, int where, int size, u32 *val)
 {
@@ -375,6 +379,37 @@ static struct platform_driver thunder_ecam_driver = {
 	.probe = thunder_ecam_probe,
 };
 module_platform_driver(thunder_ecam_driver);
+
+#ifdef CONFIG_ACPI
+
+static bool needs_cavium_erratum_24575(struct pci_cfg_fixup *fixup,
+				      struct acpi_pci_root *root)
+{
+	/*
+	 * We must match errata code and be hypervisor, quirk does not apply
+	 * for virtual machines.
+	 */
+	return cpus_have_cap(ARM64_WORKAROUND_CAVIUM_24575) &&
+	       is_hyp_mode_available();
+}
+
+DECLARE_ACPI_MCFG_FIXUP(NULL, needs_cavium_erratum_24575, &pci_thunder_ecam_ops,
+			0, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, needs_cavium_erratum_24575, &pci_thunder_ecam_ops,
+			1, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, needs_cavium_erratum_24575, &pci_thunder_ecam_ops,
+			2, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, needs_cavium_erratum_24575, &pci_thunder_ecam_ops,
+			3, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, needs_cavium_erratum_24575, &pci_thunder_ecam_ops,
+			10, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, needs_cavium_erratum_24575, &pci_thunder_ecam_ops,
+			11, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, needs_cavium_erratum_24575, &pci_thunder_ecam_ops,
+			12, PCI_MCFG_BUS_ANY);
+DECLARE_ACPI_MCFG_FIXUP(NULL, needs_cavium_erratum_24575, &pci_thunder_ecam_ops,
+			13, PCI_MCFG_BUS_ANY);
+#endif
 
 MODULE_DESCRIPTION("Thunder ECAM PCI host driver");
 MODULE_LICENSE("GPL v2");

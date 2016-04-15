@@ -445,6 +445,20 @@ config CAVIUM_ERRATUM_27456
 
 	  If unsure, say Y.
 
+config CAVIUM_ERRATUM_24575
+	bool "Cavium erratum 24575: Enhanced Allocation (EA) emualaion"
+	default y
+	help
+	  Enable workaround for erratum 24575.
+
+	  Early versions of the Cavium Thunder CN88XX processor are missing
+	  Enhanced Allocation (EA) capabilities for the fixed BAR addresses used
+	  by the on-SoC hardware blocks. The erratum adds config access
+	  functions that synthesize the missing EA capabilities for versions
+	  that are missing that information.
+
+	  If unsure, say Y.
+
 endmenu
 
 
