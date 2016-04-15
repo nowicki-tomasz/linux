@@ -11,6 +11,8 @@
  * You should have received a copy of the GNU General Public License
  * version 2 (GPLv2) along with this source code.
  */
+
+#include <linux/dmi.h>
 #include <linux/kernel.h>
 #include <linux/pci.h>
 #include <linux/pci-acpi.h>
@@ -54,6 +56,32 @@ static struct mcfg_entry *pci_mcfg_lookup(u16 seg, u8 bus_start)
 	return NULL;
 }
 
+extern struct pci_cfg_fixup __start_acpi_mcfg_fixups[];
+extern struct pci_cfg_fixup __end_acpi_mcfg_fixups[];
+
+static struct pci_generic_ecam_ops *pci_acpi_get_ops(struct acpi_pci_root *root)
+{
+	int bus_num = root->secondary.start;
+	int domain = root->segment;
+	struct pci_cfg_fixup *f;
+
+	/*
+	 * Match against platform specific quirks and return corresponding
+	 * CAM ops.
+	 *
+	 * First match against PCI topology <domain:bus> then use DMI or
+	 * custom match handler.
+	 */
+	for (f = __start_acpi_mcfg_fixups; f < __end_acpi_mcfg_fixups; f++) {
+		if ((f->domain == domain || f->domain == PCI_MCFG_DOMAIN_ANY) &&
+		    (f->bus_num == bus_num || f->bus_num == PCI_MCFG_BUS_ANY) &&
+		    (f->system ? dmi_check_system(f->system) : 1) &&
+		    (f->match ? f->match(f, root) : 1))
+			return f->ops;
+	}
+	/* No quirks, use ECAM */
+	return &pci_generic_ecam_default_ops;
+}
 
 /*
  * Lookup the bus range for the domain in MCFG, and set up config space
@@ -95,7 +123,7 @@ static int pci_acpi_setup_ecam_mapping(struct acpi_pci_root *root,
 	}
 
 	cfg = pci_generic_ecam_create(&root->device->dev, addr, bus_start,
-				      bus_end, &pci_generic_ecam_default_ops);
+				      bus_end, pci_acpi_get_ops(root));
 	if (IS_ERR(cfg)) {
 		err = PTR_ERR(cfg);
 		pr_err("%04x:%02x-%02x error %d mapping CAM\n", seg,

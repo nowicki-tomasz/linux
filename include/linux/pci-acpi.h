@@ -71,6 +71,24 @@ struct acpi_pci_root_ops {
 	int (*prepare_resources)(struct acpi_pci_root_info *info);
 };
 
+struct pci_cfg_fixup {
+	const struct dmi_system_id *system;
+	bool (*match)(struct pci_cfg_fixup *, struct acpi_pci_root *);
+	struct pci_generic_ecam_ops *ops;
+	int domain;
+	int bus_num;
+};
+
+#define PCI_MCFG_DOMAIN_ANY	-1
+#define PCI_MCFG_BUS_ANY	-1
+
+/* Designate a routine to fix up buggy MCFG */
+#define DECLARE_ACPI_MCFG_FIXUP(system, match, ops, dom, bus)		\
+	static const struct pci_cfg_fixup __mcfg_fixup_##system##dom##bus\
+	 __used	__attribute__((__section__(".acpi_fixup_mcfg"),		\
+				aligned((sizeof(void *))))) =		\
+	{ system, match, ops, dom, bus };
+
 extern int acpi_pci_probe_root_resources(struct acpi_pci_root_info *info);
 extern struct pci_bus *acpi_pci_root_create(struct acpi_pci_root *root,
 					    struct acpi_pci_root_ops *ops,
