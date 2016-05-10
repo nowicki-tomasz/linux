@@ -111,6 +111,10 @@ static inline void acpi_pci_add_bus(struct pci_bus *bus) { }
 static inline void acpi_pci_remove_bus(struct pci_bus *bus) { }
 #endif	/* CONFIG_ACPI */
 
+#ifdef CONFIG_ACPI_PCI_HOST_GENERIC
+void acpi_pci_set_companion(struct pci_host_bridge *bridge);
+int acpi_pci_bus_domain_nr(struct pci_bus *bus);
+#else
 static inline void acpi_pci_set_companion(struct pci_host_bridge *bridge)
 {
 }
@@ -119,6 +123,7 @@ static inline int acpi_pci_bus_domain_nr(struct pci_bus *bus)
 {
 	return 0;
 }
+#endif
 
 #ifdef CONFIG_ACPI_APEI
 extern bool aer_acpi_firmware_first(void);

@@ -1722,7 +1722,10 @@ void pcibios_free_irq(struct pci_dev *dev);
 extern struct dev_pm_ops pcibios_pm_ops;
 #endif
 
-#ifdef CONFIG_PCI_MMCONFIG
+#if defined(CONFIG_PCI_MMCONFIG) || defined(CONFIG_ACPI_PCI_HOST_GENERIC)
+struct acpi_device;
+phys_addr_t pci_mcfg_lookup(struct acpi_device *device, u16 seg,
+			    struct resource *bus_res);
 void __init pci_mmcfg_early_init(void);
 void __init pci_mmcfg_late_init(void);
 #else

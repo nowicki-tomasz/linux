@@ -45,6 +45,11 @@ struct pci_config_window {
 		void __iomem		*win;	/* 64-bit single mapping */
 		void __iomem		**winp; /* 32-bit per bus mapping */
 	};
+#ifdef CONFIG_ACPI_PCI_HOST_GENERIC
+	struct acpi_device		*companion; /* ACPI companion device */
+#endif
+	int				domain;
+
 };
 
 /* create and free for pci_config_window */
