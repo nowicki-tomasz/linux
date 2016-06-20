@@ -22,6 +22,7 @@
 #include <linux/kernel.h>
 #include <linux/pci.h>
 #include <linux/pci-acpi.h>
+#include <linux/pci-ecam.h>
 
 /* Structure to hold entries from the MCFG table */
 struct mcfg_entry {
@@ -34,6 +35,48 @@ struct mcfg_entry {
 
 /* List to save mcfg entries */
 static LIST_HEAD(pci_mcfg_list);
+
+/* Quirk identification */
+static char mcfg_oem_id[ACPI_OEM_ID_SIZE];
+static char mcfg_oem_table_id[ACPI_OEM_TABLE_ID_SIZE];
+static u32 mcfg_oem_revision;
+
+static bool pci_mcfg_fixup_match(struct pci_cfg_fixup *f)
+{
+	int olen = min_t(u8, strlen(f->oem_id), ACPI_OEM_ID_SIZE);
+	int tlen = min_t(u8, strlen(f->oem_table_id), ACPI_OEM_TABLE_ID_SIZE);
+
+	return (!strncmp(f->oem_id, mcfg_oem_id, olen) &&
+		!strncmp(f->oem_table_id, mcfg_oem_table_id, tlen) &&
+		f->oem_revision == mcfg_oem_revision);
+}
+
+struct pci_ecam_ops *pci_mcfg_get_ops(int domain, int bus_num)
+{
+	struct pci_cfg_fixup *f;
+
+	if (list_empty(pci_mcfg_list))
+		return &pci_generic_ecam_ops;
+
+	/*
+	 * Match against platform specific quirks and return corresponding CAM
+	 * ops.
+	 *
+	 * First match against PCI topology <domain:bus> then use OEM ID, OEM
+	 * table ID, and OEM revision from MCFG table standard header.
+	 */
+	for (f = __start_acpi_mcfg_fixups; f < __end_acpi_mcfg_fixups; f++) {
+		if ((f->domain == domain || f->domain == PCI_MCFG_DOMAIN_ANY) &&
+		    (f->bus_num == bus_num || f->bus_num == PCI_MCFG_BUS_ANY) &&
+		    pci_mcfg_fixup_match(f)) {
+			pr_info("Handling %s %s r%d PCI MCFG quirks\n",
+				f->oem_id, f->oem_table_id, f->oem_revision);
+			return f->ops;
+		}
+	}
+	/* No quirks, use ECAM */
+	return &pci_generic_ecam_ops;
+}
 
 phys_addr_t pci_mcfg_lookup(u16 seg, struct resource *bus_res)
 {
@@ -78,6 +121,11 @@ static __init int pci_mcfg_parse(struct acpi_table_header *header)
 		e->bus_end = mptr->end_bus_number;
 		list_add(&e->list, &pci_mcfg_list);
 	}
+
+	strncpy(mcfg_oem_id, header->oem_id, ACPI_OEM_ID_SIZE);
+	strncpy(mcfg_oem_table_id, header->oem_table_id,
+		ACPI_OEM_TABLE_ID_SIZE);
+	mcfg_oem_revision = header->oem_revision;
 
 	pr_info("MCFG table detected, %d entries\n", n);
 	return 0;
