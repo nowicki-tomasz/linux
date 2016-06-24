@@ -16,6 +16,11 @@
 #define __MCFG_QUIRKS_H__
 
 /* MCFG quirks initialize call list */
+
+#ifdef CONFIG_PCI_HOST_THUNDER_ECAM
+extern struct pci_ecam_ops pci_thunder_ecam_ops;
+#endif
+
 #ifdef CONFIG_PCI_HOST_THUNDER_PEM
 struct pci_config_window *
 thunder_pem_cfg_init(struct acpi_pci_root *root, struct pci_ops *ops);

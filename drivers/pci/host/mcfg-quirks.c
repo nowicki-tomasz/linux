@@ -44,7 +44,20 @@ struct pci_cfg_fixup {
 
 static struct pci_cfg_fixup mcfg_quirks[] __initconst = {
 /*	{ OEM_ID, OEM_TABLE_ID, REV, DOMAIN, BUS_RANGE, pci_ops, init_hook }, */
+
+#ifdef CONFIG_PCI_HOST_THUNDER_ECAM
+	/* Pass1.x */
+	{ "CAVIUM", "THUNDERX", 2, MCFG_DOM_RANGE(0, 3), MCFG_BUS_ANY,
+	  &pci_thunder_ecam_ops.pci_ops, NULL},
+	{ "CAVIUM", "THUNDERX", 2, MCFG_DOM_RANGE(10, 13), MCFG_BUS_ANY,
+	  &pci_thunder_ecam_ops.pci_ops, NULL},
+#endif
 #ifdef CONFIG_PCI_HOST_THUNDER_PEM
+	/* Pass1.x */
+	{ "CAVIUM", "THUNDERX", 2, MCFG_DOM_RANGE(4, 9), MCFG_BUS_ANY,
+	  NULL, thunder_pem_cfg_init},
+	{ "CAVIUM", "THUNDERX", 2, MCFG_DOM_RANGE(14, 19), MCFG_BUS_ANY,
+	  NULL, thunder_pem_cfg_init},
 	/* Pass2.0 */
 	{ "CAVIUM", "THUNDERX", 1, MCFG_DOM_RANGE(4, 9), MCFG_BUS_ANY, NULL,
 	  thunder_pem_cfg_init },
