@@ -44,6 +44,15 @@ struct pci_cfg_fixup {
 
 static struct pci_cfg_fixup mcfg_qurks[] __initconst = {
 /*	{ OEM_ID, OEM_TABLE_ID, REV, DOMAIN, BUS_RANGE, pci_ops, init_hook }, */
+#ifdef CONFIG_PCI_HOST_THUNDER_PEM
+	/* Pass2.0 */
+	{ { 'C', 'A', 'V', 'I', 'U', 'M' },
+	  { 'T', 'H', 'U', 'N', 'D', 'E', 'R', 'X' }, 1,
+	  MCFG_DOM_RANGE(4, 9), MCFG_BUS_ANY, NULL, thunder_pem_cfg_init },
+	{ { 'C', 'A', 'V', 'I', 'U', 'M' },
+	  { 'T', 'H', 'U', 'N', 'D', 'E', 'R', 'X' }, 1,
+	  MCFG_DOM_RANGE(14, 19), MCFG_BUS_ANY, NULL, thunder_pem_cfg_init },
+#endif
 };
 
 static bool pci_mcfg_fixup_match(struct pci_cfg_fixup *f,
