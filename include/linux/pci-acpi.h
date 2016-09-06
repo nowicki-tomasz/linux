@@ -29,7 +29,7 @@ extern struct pci_config_window *
 pci_mcfg_match_quirks(struct acpi_pci_root *root);
 
 extern struct pci_config_window *
-pci_acpi_setup_ecam_mapping(struct acpi_pci_root *root, struct pci_ops *ops);
+pci_acpi_setup_ecam_mapping(struct acpi_pci_root *root);
 
 static inline acpi_handle acpi_find_root_bridge_handle(struct pci_dev *pdev)
 {
