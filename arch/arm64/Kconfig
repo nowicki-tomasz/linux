@@ -105,6 +105,7 @@ config ARM64
 	select OF_EARLY_FLATTREE
 	select OF_RESERVED_MEM
 	select PCI_ECAM if ACPI
+	select PCI_ECAM_QUIRKS if ACPI
 	select POWER_RESET
 	select POWER_SUPPLY
 	select SPARSE_IRQ

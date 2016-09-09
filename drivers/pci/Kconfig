@@ -86,6 +86,12 @@ config PCI_ATS
 config PCI_ECAM
 	bool
 
+config PCI_ECAM_QUIRKS
+	bool
+	help
+	  This enables workarounds for various ECAM  bugs/quirks.
+	  Disable this only if your target machine is unaffected.
+
 config PCI_IOV
 	bool "PCI IOV support"
 	depends on PCI
