@@ -76,6 +76,21 @@ static struct mcfg_fixup mcfg_quirks[] = {
 	/* SoC pass2.x */
 	THUNDER_MCFG_QUIRK(1, 0UL),
 	THUNDER_MCFG_QUIRK(1, 1UL),
+
+	/* SoC pass1.x */
+	THUNDER_MCFG_QUIRK(2, 0UL),
+	THUNDER_MCFG_QUIRK(2, 1UL),
+#endif
+#ifdef CONFIG_PCI_HOST_THUNDER_ECAM
+	/* SoC pass1.x */
+	{ "CAVIUM", "THUNDERX", 2, 0, MCFG_BUS_ANY, &pci_thunder_ecam_ops },
+	{ "CAVIUM", "THUNDERX", 2, 1, MCFG_BUS_ANY, &pci_thunder_ecam_ops },
+	{ "CAVIUM", "THUNDERX", 2, 2, MCFG_BUS_ANY, &pci_thunder_ecam_ops },
+	{ "CAVIUM", "THUNDERX", 2, 3, MCFG_BUS_ANY, &pci_thunder_ecam_ops },
+	{ "CAVIUM", "THUNDERX", 2, 10, MCFG_BUS_ANY, &pci_thunder_ecam_ops },
+	{ "CAVIUM", "THUNDERX", 2, 11, MCFG_BUS_ANY, &pci_thunder_ecam_ops },
+	{ "CAVIUM", "THUNDERX", 2, 12, MCFG_BUS_ANY, &pci_thunder_ecam_ops },
+	{ "CAVIUM", "THUNDERX", 2, 13, MCFG_BUS_ANY, &pci_thunder_ecam_ops },
 #endif
 };
 

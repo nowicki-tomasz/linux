@@ -62,6 +62,9 @@ extern struct pci_ecam_ops pci_generic_ecam_ops;
 #ifdef CONFIG_PCI_HOST_THUNDER_PEM
 extern struct pci_ecam_ops pci_thunder_pem_ops;
 #endif
+#ifdef CONFIG_PCI_HOST_THUNDER_ECAM
+extern struct pci_ecam_ops pci_thunder_ecam_ops;
+#endif
 
 /* ops for buggy ECAM that supports only 32-bit accesses */
 extern struct pci_ecam_ops pci_32b_ops;
