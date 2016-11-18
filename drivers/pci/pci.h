@@ -356,4 +356,8 @@ static inline int pci_dev_specific_reset(struct pci_dev *dev, int probe)
 }
 #endif
 
+#if defined(CONFIG_PCI_QUIRKS) && defined(CONFIG_ARM64)
+int acpi_get_rc_resources(const char *hid, u16 segment, struct resource *res);
+#endif
+
 #endif /* DRIVERS_PCI_H */
