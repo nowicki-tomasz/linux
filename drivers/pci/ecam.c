@@ -14,6 +14,7 @@
  * version 2 (GPLv2) along with this source code.
  */
 
+#include <linux/acpi.h>
 #include <linux/device.h>
 #include <linux/io.h>
 #include <linux/kernel.h>
@@ -28,6 +29,24 @@
  * ioremap the config space for each bus individually.
  */
 static const bool per_bus_mapping = !IS_ENABLED(CONFIG_64BIT);
+
+static void pci_ecam_verify_reservation(struct device *dev,
+					struct resource *ecam)
+{
+#ifdef CONFIG_ACPI
+	struct acpi_device *adev;
+
+	adev = acpi_resource_consumer(ecam);
+	if (!adev) {
+		dev_warn(dev, FW_BUG "ECAM area %pR not reserved in ACPI namespace\n",
+			 ecam);
+		return;
+	}
+
+	dev_info(dev, "ECAM area %pR reserved by %s\n", ecam,
+		 dev_name(&adev->dev));
+#endif
+}
 
 /*
  * Create a PCI config space window
@@ -50,6 +69,8 @@ struct pci_config_window *pci_ecam_create(struct device *dev,
 	cfg = kzalloc(sizeof(*cfg), GFP_KERNEL);
 	if (!cfg)
 		return ERR_PTR(-ENOMEM);
+
+	pci_ecam_verify_reservation(dev, cfgres);
 
 	cfg->parent = dev;
 	cfg->ops = ops;
