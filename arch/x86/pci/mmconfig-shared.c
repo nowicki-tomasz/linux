@@ -373,71 +373,20 @@ static int __init pci_mmcfg_check_hostbridge(void)
 	return !list_empty(&pci_mmcfg_list);
 }
 
-static acpi_status check_mcfg_resource(struct acpi_resource *res, void *data)
-{
-	struct resource *mcfg_res = data;
-	struct acpi_resource_address64 address;
-	acpi_status status;
-
-	if (res->type == ACPI_RESOURCE_TYPE_FIXED_MEMORY32) {
-		struct acpi_resource_fixed_memory32 *fixmem32 =
-			&res->data.fixed_memory32;
-		if (!fixmem32)
-			return AE_OK;
-		if ((mcfg_res->start >= fixmem32->address) &&
-		    (mcfg_res->end < (fixmem32->address +
-				      fixmem32->address_length))) {
-			mcfg_res->flags = 1;
-			return AE_CTRL_TERMINATE;
-		}
-	}
-	if ((res->type != ACPI_RESOURCE_TYPE_ADDRESS32) &&
-	    (res->type != ACPI_RESOURCE_TYPE_ADDRESS64))
-		return AE_OK;
-
-	status = acpi_resource_to_address64(res, &address);
-	if (ACPI_FAILURE(status) ||
-	   (address.address.address_length <= 0) ||
-	   (address.resource_type != ACPI_MEMORY_RANGE))
-		return AE_OK;
-
-	if ((mcfg_res->start >= address.address.minimum) &&
-	    (mcfg_res->end < (address.address.minimum + address.address.address_length))) {
-		mcfg_res->flags = 1;
-		return AE_CTRL_TERMINATE;
-	}
-	return AE_OK;
-}
-
-static acpi_status find_mboard_resource(acpi_handle handle, u32 lvl,
-					void *context, void **rv)
-{
-	struct resource *mcfg_res = context;
-
-	acpi_walk_resources(handle, METHOD_NAME__CRS,
-			    check_mcfg_resource, context);
-
-	if (mcfg_res->flags)
-		return AE_CTRL_TERMINATE;
-
-	return AE_OK;
-}
-
 static int is_acpi_reserved(u64 start, u64 end, unsigned not_used)
 {
 	struct resource mcfg_res;
+	struct acpi_device *adev;
 
 	mcfg_res.start = start;
 	mcfg_res.end = end - 1;
-	mcfg_res.flags = 0;
+	mcfg_res.flags = IORESOURCE_MEM;
 
-	acpi_get_devices("PNP0C01", find_mboard_resource, &mcfg_res, NULL);
+	adev = acpi_resource_consumer(&mcfg_res);
+	if (adev)
+		return 1;
 
-	if (!mcfg_res.flags)
-		acpi_get_devices("PNP0C02", find_mboard_resource, &mcfg_res,
-				 NULL);
-
-	return mcfg_res.flags;
+	return 0;
 }
 
 typedef int (*check_reserved_t)(u64 start, u64 end, unsigned type);
@@ -450,7 +399,7 @@ static int __ref is_mmconf_reserved(check_reserved_t is_reserved,
 	u64 size = resource_size(&cfg->res);
 	u64 old_size = size;
 	int num_buses;
-	char *method = with_e820 ? "E820" : "ACPI motherboard resources";
+	char *method = with_e820 ? "E820" : "ACPI namespace";
 
 	while (!is_reserved(addr, addr + size, E820_RESERVED)) {
 		size >>= 1;
@@ -504,12 +453,12 @@ static int __ref pci_mmcfg_check_reserved(struct device *dev,
 		if (dev)
 			dev_info(dev, FW_INFO
 				 "MMCONFIG at %pR not reserved in "
-				 "ACPI motherboard resources\n",
+				 "ACPI namespace\n",
 				 &cfg->res);
 		else
 			pr_info(FW_INFO PREFIX
 			       "MMCONFIG at %pR not reserved in "
-			       "ACPI motherboard resources\n",
+			       "ACPI namespace\n",
 			       &cfg->res);
 	}
 
