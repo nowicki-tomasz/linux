@@ -4463,7 +4463,7 @@ DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_INTEL, 0x2031, quirk_no_aersid);
 DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_INTEL, 0x2032, quirk_no_aersid);
 DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_INTEL, 0x2033, quirk_no_aersid);
 
-#ifdef CONFIG_ARM64
+#if defined(CONFIG_ARM64) && defined(CONFIG_ACPI)
 /* ops for buggy ECAM that supports only 32-bit accesses */
 struct pci_ecam_ops pci_32b_ops = {
 	.bus_shift	= 20,
