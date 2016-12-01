@@ -72,6 +72,25 @@ static struct mcfg_fixup mcfg_quirks[] = {
 	HISI_QUAD_DOM("HIP07   ", 4, &hisi_pcie_ops),
 	HISI_QUAD_DOM("HIP07   ", 8, &hisi_pcie_ops),
 	HISI_QUAD_DOM("HIP07   ", 12, &hisi_pcie_ops),
+
+#define THUNDER_MCFG_RES(addr, node) \
+	DEFINE_RES_MEM(addr + (node << 44), 0x39 * SZ_16M)
+#define THUNDER_MCFG_QUIRK(rev, node) \
+	{ "CAVIUM", "THUNDERX", rev, 4 + (10 * node), MCFG_BUS_ANY, \
+	  &pci_thunder_pem_ops, THUNDER_MCFG_RES(0x88001f000000UL, node) }, \
+	{ "CAVIUM", "THUNDERX", rev, 5 + (10 * node), MCFG_BUS_ANY, \
+	  &pci_thunder_pem_ops, THUNDER_MCFG_RES(0x884057000000UL, node) }, \
+	{ "CAVIUM", "THUNDERX", rev, 6 + (10 * node), MCFG_BUS_ANY, \
+	  &pci_thunder_pem_ops, THUNDER_MCFG_RES(0x88808f000000UL, node) }, \
+	{ "CAVIUM", "THUNDERX", rev, 7 + (10 * node), MCFG_BUS_ANY, \
+	  &pci_thunder_pem_ops, THUNDER_MCFG_RES(0x89001f000000UL, node) }, \
+	{ "CAVIUM", "THUNDERX", rev, 8 + (10 * node), MCFG_BUS_ANY, \
+	  &pci_thunder_pem_ops, THUNDER_MCFG_RES(0x894057000000UL, node) }, \
+	{ "CAVIUM", "THUNDERX", rev, 9 + (10 * node), MCFG_BUS_ANY, \
+	  &pci_thunder_pem_ops, THUNDER_MCFG_RES(0x89808f000000UL, node) }
+	/* SoC pass2.x */
+	THUNDER_MCFG_QUIRK(1, 0UL),
+	THUNDER_MCFG_QUIRK(1, 1UL),
 };
 
 static char mcfg_oem_id[ACPI_OEM_ID_SIZE];
