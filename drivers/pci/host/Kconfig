@@ -133,7 +133,7 @@ config PCIE_XILINX
 
 config PCI_XGENE
 	bool "X-Gene PCIe controller"
-	depends on ARCH_XGENE
+	depends on ARM64
 	depends on OF
 	select PCIEPORTBUS
 	help
