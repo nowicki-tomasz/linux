@@ -103,17 +103,6 @@ int acpi_pci_bus_find_domain_nr(struct pci_bus *bus)
 	return root->segment;
 }
 
-int pcibios_root_bridge_prepare(struct pci_host_bridge *bridge)
-{
-	if (!acpi_disabled) {
-		struct pci_config_window *cfg = bridge->bus->sysdata;
-		struct acpi_device *adev = to_acpi_device(cfg->parent);
-		ACPI_COMPANION_SET(&bridge->dev, adev);
-	}
-
-	return 0;
-}
-
 static int pci_acpi_root_prepare_resources(struct acpi_pci_root_info *ci)
 {
 	struct resource_entry *entry, *tmp;

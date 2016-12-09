@@ -871,7 +871,9 @@ struct pci_bus *acpi_pci_root_create(struct acpi_pci_root *root,
 	int ret, busnum = root->secondary.start;
 	struct acpi_device *device = root->device;
 	int node = acpi_get_node(device->handle);
+	struct pci_host_bridge *bridge;
 	struct pci_bus *bus;
+	int error;
 
 	info->root = root;
 	info->bridge = device;
@@ -891,11 +893,24 @@ struct pci_bus *acpi_pci_root_create(struct acpi_pci_root *root,
 
 	pci_acpi_root_add_resources(info);
 	pci_add_resource(&info->resources, &root->secondary);
-	bus = pci_create_root_bus(NULL, busnum, ops->pci_ops,
-				  sysdata, &info->resources);
-	if (!bus)
+
+	bridge = pci_alloc_host_bridge(0);
+	if (!bridge)
+		return NULL;
+
+	bridge->dev.release = pci_release_host_bridge_dev;
+
+	list_splice_init(&info->resources, &bridge->windows);
+	bridge->sysdata = sysdata;
+	bridge->busnr = busnum;
+	bridge->ops = ops->pci_ops;
+	ACPI_COMPANION_SET(&bridge->dev, root->device);
+
+	error = pci_register_host_bridge(bridge);
+	if (error < 0)
 		goto out_release_info;
 
+	bus = bridge->bus;
 	pci_scan_child_bus(bus);
 	pci_set_host_bridge_release(to_pci_host_bridge(bus->bridge),
 				    acpi_pci_root_release_info, info);
