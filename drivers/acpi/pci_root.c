@@ -902,6 +902,9 @@ struct pci_bus *acpi_pci_root_create(struct acpi_pci_root *root,
 
 	list_splice_init(&info->resources, &bridge->windows);
 	bridge->sysdata = sysdata;
+#ifdef CONFIG_PCI_DOMAINS_GENERIC
+	bridge->domain_nr = root->segment;
+#endif
 	bridge->busnr = busnum;
 	bridge->ops = ops->pci_ops;
 	ACPI_COMPANION_SET(&bridge->dev, root->device);

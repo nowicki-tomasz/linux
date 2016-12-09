@@ -422,6 +422,9 @@ struct pci_host_bridge {
 	struct pci_bus *bus;		/* root bus */
 	struct pci_ops *ops;
 	void *sysdata;
+#ifdef CONFIG_PCI_DOMAINS_GENERIC
+	int domain_nr;
+#endif
 	int busnr;
 	struct list_head windows;	/* resource_entry */
 	void (*release_fn)(struct pci_host_bridge *);
@@ -504,9 +507,6 @@ struct pci_bus {
 	unsigned char	primary;	/* number of primary bridge */
 	unsigned char	max_bus_speed;	/* enum pci_bus_speed */
 	unsigned char	cur_bus_speed;	/* enum pci_bus_speed */
-#ifdef CONFIG_PCI_DOMAINS_GENERIC
-	int		domain_nr;
-#endif
 
 	char		name[48];
 
@@ -1469,15 +1469,10 @@ static inline int pci_get_new_domain_nr(void) { return -ENOSYS; }
 #ifdef CONFIG_PCI_DOMAINS_GENERIC
 static inline int pci_domain_nr(struct pci_bus *bus)
 {
-	return bus->domain_nr;
+	struct pci_host_bridge *host = pci_find_host_bridge(bus);
+	return host->domain_nr;
 }
-#ifdef CONFIG_ACPI
-int acpi_pci_bus_find_domain_nr(struct pci_bus *bus);
-#else
-static inline int acpi_pci_bus_find_domain_nr(struct pci_bus *bus)
-{ return 0; }
-#endif
-int pci_bus_find_domain_nr(struct pci_bus *bus, struct device *parent);
+int pci_bus_find_domain_nr(struct device *parent);
 #endif
 
 /* some architectures require additional setup to direct VGA traffic */

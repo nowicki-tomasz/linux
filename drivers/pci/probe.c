@@ -503,10 +503,6 @@ static struct pci_bus *pci_alloc_bus(struct pci_bus *parent)
 	INIT_LIST_HEAD(&b->resources);
 	b->max_bus_speed = PCI_SPEED_UNKNOWN;
 	b->cur_bus_speed = PCI_SPEED_UNKNOWN;
-#ifdef CONFIG_PCI_DOMAINS_GENERIC
-	if (parent)
-		b->domain_nr = parent->domain_nr;
-#endif
 	return b;
 }
 
@@ -743,9 +739,6 @@ int pci_register_host_bridge(struct pci_host_bridge *bridge)
 	bus->msi = bridge->msi;
 	bus->ops = bridge->ops;
 	bus->number = bus->busn_res.start = bridge->busnr;
-#ifdef CONFIG_PCI_DOMAINS_GENERIC
-	bus->domain_nr = pci_bus_find_domain_nr(bus, parent);
-#endif
 
 	b = pci_find_bus(pci_domain_nr(bus), bridge->busnr);
 	if (b) {
@@ -2268,6 +2261,9 @@ static struct pci_bus *pci_create_root_bus_msi(struct device *parent,
 	bridge->busnr = bus;
 	bridge->ops = ops;
 	bridge->msi = msi;
+#ifdef CONFIG_PCI_DOMAINS_GENERIC
+	bridge->domain_nr = pci_bus_find_domain_nr(parent);
+#endif
 
 	error = pci_register_host_bridge(bridge);
 	if (error < 0)

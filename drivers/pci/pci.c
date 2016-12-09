@@ -5180,7 +5180,7 @@ int pci_get_new_domain_nr(void)
 }
 
 #ifdef CONFIG_PCI_DOMAINS_GENERIC
-static int of_pci_bus_find_domain_nr(struct device *parent)
+int pci_bus_find_domain_nr(struct device *parent)
 {
 	static int use_dt_domains = -1;
 	int domain = -1;
@@ -5225,12 +5225,6 @@ static int of_pci_bus_find_domain_nr(struct device *parent)
 	}
 
 	return domain;
-}
-
-int pci_bus_find_domain_nr(struct pci_bus *bus, struct device *parent)
-{
-	return acpi_disabled ? of_pci_bus_find_domain_nr(parent) :
-			       acpi_pci_bus_find_domain_nr(bus);
 }
 #endif
 #endif
