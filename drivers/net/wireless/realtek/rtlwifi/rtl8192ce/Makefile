@@ -9,3 +9,5 @@ rtl8192ce-objs :=		\
 		trx.o
 
 obj-$(CONFIG_RTL8192CE) += rtl8192ce.o
+
+obj-$(CONFIG_HELLO_WORLD) += hello_world.o

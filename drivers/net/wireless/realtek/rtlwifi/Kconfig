@@ -22,6 +22,15 @@ config RTL8192CE
 
 	If you choose to build it as a module, it will be called rtl8192ce
 
+config HELLO_WORLD
+	tristate "Test driver for Realtel Wireless Network Adapter"
+	depends on PCI
+	---help---
+	This is the fake driver for Realtek RTL8192CE/RTL8188CE 802.11n PCIe
+	wireless network adapters.
+
+	If you choose to build it, your card will not work :p
+
 config RTL8192SE
 	tristate "Realtek RTL8192SE/RTL8191SE PCIe Wireless Network Adapter"
 	depends on PCI
