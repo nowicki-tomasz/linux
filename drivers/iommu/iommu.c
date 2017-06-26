@@ -1605,6 +1605,9 @@ size_t iommu_unmap(struct iommu_domain *domain, unsigned long iova, size_t size)
 		unmapped += unmapped_page;
 	}
 
+	if (domain->ops->unmap_tlb_sync)
+		domain->ops->unmap_tlb_sync(domain);
+
 	trace_unmap(orig_iova, size, unmapped);
 	return unmapped;
 }
