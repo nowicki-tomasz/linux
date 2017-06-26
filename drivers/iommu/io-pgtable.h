@@ -120,6 +120,7 @@ struct io_pgtable_ops {
 		   phys_addr_t paddr, size_t size, int prot);
 	int (*unmap)(struct io_pgtable_ops *ops, unsigned long iova,
 		     size_t size);
+	void (*unmap_tlb_sync)(struct io_pgtable_ops *ops);
 	phys_addr_t (*iova_to_phys)(struct io_pgtable_ops *ops,
 				    unsigned long iova);
 };

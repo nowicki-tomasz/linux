@@ -304,6 +304,7 @@ static int arm_lpae_init_pte(struct arm_lpae_io_pgtable *data,
 		WARN_ON(!selftest_running);
 		return -EEXIST;
 	} else if (iopte_type(pte, lvl) == ARM_LPAE_PTE_TYPE_TABLE) {
+		size_t unmapped;
 		/*
 		 * We need to unmap and free the old table before
 		 * overwriting it with a block entry.
@@ -312,7 +313,9 @@ static int arm_lpae_init_pte(struct arm_lpae_io_pgtable *data,
 		size_t sz = ARM_LPAE_BLOCK_SIZE(lvl, data);
 
 		tblp = ptep - ARM_LPAE_LVL_IDX(iova, lvl, data);
-		if (WARN_ON(__arm_lpae_unmap(data, iova, sz, lvl, tblp) != sz))
+               unmapped = __arm_lpae_unmap(data, iova, sz, lvl, tblp);
+               io_pgtable_tlb_sync(&data->iop);
+               if (WARN_ON(unmapped != sz))
 			return -EINVAL;
 	}
 
@@ -584,7 +587,6 @@ static int __arm_lpae_unmap(struct arm_lpae_io_pgtable *data,
 			/* Also flush any partial walks */
 			io_pgtable_tlb_add_flush(iop, iova, size,
 						ARM_LPAE_GRANULE(data), false);
-			io_pgtable_tlb_sync(iop);
 			ptep = iopte_deref(pte, data);
 			__arm_lpae_free_pgtable(data, lvl + 1, ptep);
 		} else {
@@ -609,7 +611,6 @@ static int __arm_lpae_unmap(struct arm_lpae_io_pgtable *data,
 static int arm_lpae_unmap(struct io_pgtable_ops *ops, unsigned long iova,
 			  size_t size)
 {
-	size_t unmapped;
 	struct arm_lpae_io_pgtable *data = io_pgtable_ops_to_data(ops);
 	arm_lpae_iopte *ptep = data->pgd;
 	int lvl = ARM_LPAE_START_LVL(data);
@@ -617,11 +618,14 @@ static int arm_lpae_unmap(struct io_pgtable_ops *ops, unsigned long iova,
 	if (WARN_ON(iova >= (1ULL << data->iop.cfg.ias)))
 		return 0;
 
-	unmapped = __arm_lpae_unmap(data, iova, size, lvl, ptep);
-	if (unmapped)
-		io_pgtable_tlb_sync(&data->iop);
+       return __arm_lpae_unmap(data, iova, size, lvl, ptep);
+}
 
-	return unmapped;
+static void arm_lpae_unmap_tlb_sync(struct io_pgtable_ops *ops)
+{
+	struct arm_lpae_io_pgtable *data = io_pgtable_ops_to_data(ops);
+
+	io_pgtable_tlb_sync(&data->iop);
 }
 
 static phys_addr_t arm_lpae_iova_to_phys(struct io_pgtable_ops *ops,
@@ -734,6 +738,7 @@ arm_lpae_alloc_pgtable(struct io_pgtable_cfg *cfg)
 	data->iop.ops = (struct io_pgtable_ops) {
 		.map		= arm_lpae_map,
 		.unmap		= arm_lpae_unmap,
+		.unmap_tlb_sync = arm_lpae_unmap_tlb_sync,
 		.iova_to_phys	= arm_lpae_iova_to_phys,
 	};
 
@@ -1030,7 +1035,7 @@ static int __init arm_lpae_run_tests(struct io_pgtable_cfg *cfg)
 
 	int i, j;
 	unsigned long iova;
-	size_t size;
+	size_t size, unmapped;
 	struct io_pgtable_ops *ops;
 
 	selftest_running = true;
@@ -1082,7 +1087,9 @@ static int __init arm_lpae_run_tests(struct io_pgtable_cfg *cfg)
 
 		/* Partial unmap */
 		size = 1UL << __ffs(cfg->pgsize_bitmap);
-		if (ops->unmap(ops, SZ_1G + size, size) != size)
+                unmapped = ops->unmap(ops, SZ_1G + size, size);
+                ops->unmap_tlb_sync(ops);
+                if (unmapped != size)
 			return __FAIL(ops, i);
 
 		/* Remap of partial unmap */
@@ -1098,7 +1105,9 @@ static int __init arm_lpae_run_tests(struct io_pgtable_cfg *cfg)
 		while (j != BITS_PER_LONG) {
 			size = 1UL << j;
 
-			if (ops->unmap(ops, iova, size) != size)
+                       unmapped = ops->unmap(ops, iova, size);
+                       ops->unmap_tlb_sync(ops);
+                       if (unmapped != size)
 				return __FAIL(ops, i);
 
 			if (ops->iova_to_phys(ops, iova + 42))
