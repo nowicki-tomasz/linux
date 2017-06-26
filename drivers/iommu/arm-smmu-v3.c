@@ -339,6 +339,7 @@
 /* Command queue */
 #define CMDQ_ENT_DWORDS			2
 #define CMDQ_MAX_SZ_SHIFT		8
+#define CMDQ_MAX_DELAYED		32
 
 #define CMDQ_ERR_SHIFT			24
 #define CMDQ_ERR_MASK			0x7f
@@ -484,6 +485,7 @@ struct arm_smmu_cmdq_ent {
 			};
 		} cfgi;
 
+		#define CMDQ_OP_TLBI_NH_ALL	0x10
 		#define CMDQ_OP_TLBI_NH_ASID	0x11
 		#define CMDQ_OP_TLBI_NH_VA	0x12
 		#define CMDQ_OP_TLBI_EL2_ALL	0x20
@@ -511,6 +513,7 @@ struct arm_smmu_cmdq_ent {
 
 struct arm_smmu_queue {
 	int				irq; /* Wired interrupt */
+	u32				nr_delay;
 
 	__le64				*base;
 	dma_addr_t			base_dma;
@@ -747,11 +750,16 @@ static int queue_sync_prod(struct arm_smmu_queue *q)
 	return ret;
 }
 
-static void queue_inc_prod(struct arm_smmu_queue *q)
+static void queue_inc_swprod(struct arm_smmu_queue *q)
 {
-	u32 prod = (Q_WRP(q, q->prod) | Q_IDX(q, q->prod)) + 1;
+	u32 prod = q->prod + 1;
 
 	q->prod = Q_OVF(q, q->prod) | Q_WRP(q, prod) | Q_IDX(q, prod);
+}
+
+static void queue_inc_prod(struct arm_smmu_queue *q)
+{
+	queue_inc_swprod(q);
 	writel(q->prod, q->prod_reg);
 }
 
@@ -793,13 +801,24 @@ static void queue_write(__le64 *dst, u64 *src, size_t n_dwords)
 		*dst++ = cpu_to_le64(*src++);
 }
 
-static int queue_insert_raw(struct arm_smmu_queue *q, u64 *ent)
+static int queue_insert_raw(struct arm_smmu_queue *q, u64 *ent, int optimize)
 {
 	if (queue_full(q))
 		return -ENOSPC;
 
 	queue_write(Q_ENT(q, q->prod), ent, q->ent_dwords);
-	queue_inc_prod(q);
+
+	/*
+	 * We don't want too many commands to be delayed, this may lead the
+	 * followed sync command to wait for a long time.
+	 */
+	if (optimize && (++q->nr_delay < CMDQ_MAX_DELAYED)) {
+		queue_inc_swprod(q);
+	} else {
+		queue_inc_prod(q);
+		q->nr_delay = 0;
+	}
+
 	return 0;
 }
 
@@ -941,6 +960,7 @@ static void arm_smmu_cmdq_skip_err(struct arm_smmu_device *smmu)
 static void arm_smmu_cmdq_issue_cmd(struct arm_smmu_device *smmu,
 				    struct arm_smmu_cmdq_ent *ent)
 {
+	int optimize = 0;
 	u64 cmd[CMDQ_ENT_DWORDS];
 	unsigned long flags;
 	bool wfe = !!(smmu->features & ARM_SMMU_FEAT_SEV);
@@ -952,8 +972,17 @@ static void arm_smmu_cmdq_issue_cmd(struct arm_smmu_device *smmu,
 		return;
 	}
 
+	/*
+	 * All TLBI commands should be followed by a sync command later.
+	 * The CFGI commands is the same, but they are rarely executed.
+	 * So just optimize TLBI commands now, to reduce the "if" judgement.
+	 */
+	if ((ent->opcode >= CMDQ_OP_TLBI_NH_ALL) &&
+	    (ent->opcode <= CMDQ_OP_TLBI_NSNH_ALL))
+		optimize = 1;
+
 	spin_lock_irqsave(&smmu->cmdq.lock, flags);
-	while (queue_insert_raw(q, cmd) == -ENOSPC) {
+	while (queue_insert_raw(q, cmd, optimize) == -ENOSPC) {
 		if (queue_poll_cons(q, false, wfe))
 			dev_err_ratelimited(smmu->dev, "CMDQ timeout\n");
 	}
@@ -2003,6 +2032,8 @@ static int arm_smmu_init_one_queue(struct arm_smmu_device *smmu,
 		     << Q_BASE_LOG2SIZE_SHIFT;
 
 	q->prod = q->cons = 0;
+	q->nr_delay = 0;
+
 	return 0;
 }
 
@@ -2586,6 +2617,7 @@ static int arm_smmu_device_hw_probe(struct arm_smmu_device *smmu)
 		dev_err(smmu->dev, "unit-length command queue not supported\n");
 		return -ENXIO;
 	}
+	BUILD_BUG_ON(CMDQ_MAX_DELAYED >= (1 << CMDQ_MAX_SZ_SHIFT));
 
 	smmu->evtq.q.max_n_shift = min((u32)EVTQ_MAX_SZ_SHIFT,
 				       reg >> IDR1_EVTQ_SHIFT & IDR1_EVTQ_MASK);
