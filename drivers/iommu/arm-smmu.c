@@ -1420,6 +1420,15 @@ static size_t arm_smmu_unmap(struct iommu_domain *domain, unsigned long iova,
 	return ops->unmap(ops, iova, size);
 }
 
+static void arm_smmu_unmap_tlb_sync(struct iommu_domain *domain)
+{
+       struct arm_smmu_domain *smmu_domain = to_smmu_domain(domain);
+       struct io_pgtable_ops *ops= smmu_domain->pgtbl_ops;
+
+       if (ops && ops->unmap_tlb_sync)
+               ops->unmap_tlb_sync(ops);
+}
+
 static phys_addr_t arm_smmu_iova_to_phys_hard(struct iommu_domain *domain,
 					      dma_addr_t iova)
 {
@@ -1722,6 +1731,7 @@ static struct iommu_ops arm_smmu_ops = {
 	.attach_dev		= arm_smmu_attach_dev,
 	.map			= arm_smmu_map,
 	.unmap			= arm_smmu_unmap,
+	.unmap_tlb_sync         = arm_smmu_unmap_tlb_sync,
 	.map_sg			= default_iommu_map_sg,
 	.iova_to_phys		= arm_smmu_iova_to_phys,
 	.add_device		= arm_smmu_add_device,
