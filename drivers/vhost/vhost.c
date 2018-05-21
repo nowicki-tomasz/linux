@@ -1201,6 +1201,37 @@ static int vhost_iommu_fill_iotlb(struct vhost_dev *dev,
 	return 0;
 }
 
+static void __vhost_vq_meta_inv(struct vhost_virtqueue *vq,
+				struct vhost_umem_node *node)
+{
+	const struct vhost_umem_node *iotlb;
+	int i;
+
+	for (i = 0; i < VHOST_NUM_ADDRS; i++) {
+		iotlb = vq->meta_iotlb[i];
+		if ((iotlb->start >= node->start && iotlb->start <= node->last) ||
+		    (iotlb->last >= node->start && iotlb->last <= node->last) ||
+		    (iotlb->start < node->start && iotlb->last > node->last))
+			vq->meta_iotlb[i] = NULL;
+	}
+}
+
+static void vhost_vq_meta_inv(struct vhost_dev *d, struct vhost_umem_node *node)
+{
+	int i;
+
+	for (i = 0; i < d->nvqs; ++i)
+		__vhost_vq_meta_inv(d->vqs[i], node);
+}
+
+void vhost_iommu_iotlb_inv(struct vhost_dev *dev, struct vhost_umem_node *node)
+{
+	vhost_dev_lock_vqs(dev);
+	vhost_vq_meta_inv(dev, node);
+	vhost_del_umem_range(dev->iotlb, node->start, node->last);
+	vhost_dev_unlock_vqs(dev);
+}
+
 static int iotlb_access_ok(struct vhost_virtqueue *vq,
 			   int access, u64 addr, u64 len, int type)
 {
