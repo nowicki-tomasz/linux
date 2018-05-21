@@ -193,6 +193,8 @@ static inline struct vhost_umem_node *vhost_iommu_translate(
 {
 	return NULL;
 }
+void vhost_iommu_iotlb_inv(struct vhost_dev *dev,
+			   struct vhost_umem_node *node);
 
 int vhost_get_vq_desc(struct vhost_virtqueue *,
 		      struct iovec iov[], unsigned int iov_count,
