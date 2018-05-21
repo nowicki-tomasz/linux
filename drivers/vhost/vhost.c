@@ -423,6 +423,7 @@ void vhost_dev_init(struct vhost_dev *dev,
 	dev->iotlb = NULL;
 	dev->mm = NULL;
 	dev->worker = NULL;
+	dev->iommu_as = NULL;
 	init_llist_head(&dev->work_list);
 	init_waitqueue_head(&dev->wait);
 	INIT_LIST_HEAD(&dev->read_list);
@@ -1177,8 +1178,11 @@ static int iotlb_access_ok(struct vhost_virtqueue *vq,
 							   addr,
 							   last);
 		if (node == NULL || node->start > addr) {
-			vhost_iotlb_miss(vq, addr, access);
-			return false;
+			if (!vq->dev->iommu_as) {
+				vhost_iotlb_miss(vq, addr, access);
+				return false;
+			}
+
 		} else if (!(node->perm & access)) {
 			/* Report the possible access violation by
 			 * request another translation from userspace.
@@ -1811,8 +1815,12 @@ static int translate_desc(struct vhost_virtqueue *vq, u64 addr, u32 len,
 				ret = -EFAULT;
 				break;
 			}
-			ret = -EAGAIN;
-			break;
+
+			if (!dev->iommu_as) {
+				ret = -EAGAIN;
+				break;
+			}
+
 		} else if (!(node->perm & access)) {
 			ret = -EPERM;
 			break;

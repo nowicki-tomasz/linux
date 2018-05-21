@@ -152,6 +152,7 @@ struct vhost_msg_node {
   struct list_head node;
 };
 
+struct vhost_iommu_as;
 struct vhost_dev {
 	struct mm_struct *mm;
 	struct mutex mutex;
@@ -166,6 +167,7 @@ struct vhost_dev {
 	struct list_head read_list;
 	struct list_head pending_list;
 	wait_queue_head_t wait;
+	struct vhost_iommu_as *iommu_as;
 };
 
 void vhost_dev_init(struct vhost_dev *, struct vhost_virtqueue **vqs, int nvqs);
