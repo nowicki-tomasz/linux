@@ -57,6 +57,7 @@ struct vhost_log {
 
 struct vhost_umem_node {
 	struct rb_node rb;
+	struct rb_node rb_iommu;
 	struct list_head link;
 	__u64 start;
 	__u64 last;
@@ -65,6 +66,8 @@ struct vhost_umem_node {
 	__u32 perm;
 	__u32 flags_padding;
 	__u64 __subtree_last;
+	__u64 __subtree_last_iommu;
+	__u64 iommu_owner;
 };
 
 struct vhost_umem {
