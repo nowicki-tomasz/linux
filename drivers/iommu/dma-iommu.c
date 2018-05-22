@@ -39,22 +39,6 @@ struct iommu_dma_msi_page {
 	phys_addr_t		phys;
 };
 
-enum iommu_dma_cookie_type {
-	IOMMU_DMA_IOVA_COOKIE,
-	IOMMU_DMA_MSI_COOKIE,
-};
-
-struct iommu_dma_cookie {
-	enum iommu_dma_cookie_type	type;
-	union {
-		/* Full allocator for IOMMU_DMA_IOVA_COOKIE */
-		struct iova_domain	iovad;
-		/* Trivial linear page allocator for IOMMU_DMA_MSI_COOKIE */
-		dma_addr_t		msi_iova;
-	};
-	struct list_head		msi_page_list;
-	spinlock_t			msi_lock;
-};
 
 static inline size_t cookie_msi_granule(struct iommu_dma_cookie *cookie)
 {
@@ -273,6 +257,7 @@ int iommu_dma_init_domain(struct iommu_domain *domain, dma_addr_t base,
 	struct iommu_dma_cookie *cookie = domain->iova_cookie;
 	struct iova_domain *iovad = &cookie->iovad;
 	unsigned long order, base_pfn, end_pfn;
+	int ret;
 
 	if (!cookie || cookie->type != IOMMU_DMA_IOVA_COOKIE)
 		return -EINVAL;
@@ -309,6 +294,11 @@ int iommu_dma_init_domain(struct iommu_domain *domain, dma_addr_t base,
 	if (!dev)
 		return 0;
 
+	ret = init_iova_flush_queue(iovad, iommu_flush_iova, iommu_free_iova);
+	if (ret)
+		return ret;
+
+	iovad->domain = domain;
 	return iova_reserve_iommu_regions(dev, domain);
 }
 EXPORT_SYMBOL(iommu_dma_init_domain);
@@ -393,6 +383,8 @@ static void iommu_dma_free_iova(struct iommu_dma_cookie *cookie,
 				size >> iova_shift(iovad));
 }
 
+bool viommu_get_unmap_flag(void);
+
 static void __iommu_dma_unmap(struct iommu_domain *domain, dma_addr_t dma_addr,
 		size_t size)
 {
@@ -404,7 +396,8 @@ static void __iommu_dma_unmap(struct iommu_domain *domain, dma_addr_t dma_addr,
 	size = iova_align(iovad, size + iova_off);
 
 	WARN_ON(iommu_unmap(domain, dma_addr, size) != size);
-	iommu_dma_free_iova(cookie, dma_addr, size);
+	if (viommu_get_unmap_flag())
+		iommu_dma_free_iova(cookie, dma_addr, size);
 }
 
 static void __iommu_dma_free_pages(struct page **pages, int count)

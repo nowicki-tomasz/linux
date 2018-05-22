@@ -14,7 +14,10 @@
 #include <linux/dma-iommu.h>
 #include <linux/freezer.h>
 #include <linux/interval_tree.h>
+#include <linux/iommu-helper.h>
 #include <linux/iommu.h>
+#include <linux/iova.h>
+#include <linux/llist.h>
 #include <linux/module.h>
 #include <linux/of_iommu.h>
 #include <linux/of_platform.h>
@@ -62,6 +65,7 @@ struct viommu_mapping {
 		struct virtio_iommu_req_map map;
 		struct virtio_iommu_req_unmap unmap;
 	} req;
+	struct llist_node		llist;
 };
 
 struct viommu_domain {
@@ -75,6 +79,8 @@ struct viommu_domain {
 
 	/* Number of endpoints attached to this domain */
 	unsigned long			endpoints;
+	struct llist_head		inv_queue;
+	atomic64_t			inv_queue_num;
 };
 
 struct viommu_endpoint {
@@ -99,6 +105,26 @@ struct viommu_event {
 		struct virtio_iommu_fault fault;
 	};
 };
+
+static bool viommu_unmap_flush = true;	/* if true, flush on every unmap */
+
+bool viommu_get_unmap_flag(void)
+{
+	return viommu_unmap_flush;
+}
+
+static int __init iommu_set_strict_type(char *str)
+{
+	bool pt;
+
+	if (!str || strtobool(str, &pt))
+		return -EINVAL;
+
+	viommu_unmap_flush = pt ? true : false;
+	pr_info("%s batched IOTLB flush\n", pt ? "Disable" : "Enable");
+	return 0;
+}
+early_param("iommu.virtio_strict", iommu_set_strict_type);
 
 #define to_viommu_domain(domain)	\
 	container_of(domain, struct viommu_domain, domain)
@@ -176,7 +202,7 @@ static int viommu_receive_resp(struct viommu_dev *viommu, int nr_sent,
 
 	unsigned int len;
 	int nr_received = 0;
-	struct viommu_request *req, *pending;
+	struct viommu_request *req, *pending, *tmp;
 	struct virtqueue *vq = viommu->vqs[VIOMMU_REQUEST_VQ];
 
 	pending = list_first_entry_or_null(sent, struct viommu_request, list);
@@ -198,7 +224,9 @@ static int viommu_receive_resp(struct viommu_dev *viommu, int nr_sent,
 			break;
 		}
 
+		tmp = pending;
 		pending = list_next_entry(pending, list);
+		list_del(&tmp->list);
 	}
 
 	return nr_received;
@@ -701,6 +729,52 @@ static void viommu_domain_free(struct iommu_domain *domain)
 	kfree(vdomain);
 }
 
+void iommu_flush_iova(struct iova_domain *iovad)
+{
+	struct iommu_domain *domain = iovad->domain;
+	struct viommu_domain *vdomain = to_viommu_domain(domain);
+	struct viommu_mapping *mapping;
+	size_t top_size, bottom_size;
+	struct viommu_request *reqs;
+	struct llist_node *llnode;
+	uint64_t inv_element = 0;
+	int i = 0, nr_sent, ret;
+
+	llnode = llist_del_all(&vdomain->inv_queue);
+	llist_for_each_entry(mapping, llnode, llist)
+		inv_element++;
+
+	reqs = kcalloc(inv_element, sizeof(*reqs), GFP_KERNEL);
+	if (!reqs) {
+		BUG_ON(1);
+		return;
+	}
+
+	bottom_size = sizeof(struct virtio_iommu_req_tail);
+	top_size = sizeof(struct virtio_iommu_req_unmap) - bottom_size;
+
+	llist_for_each_entry(mapping, llnode, llist) {
+		sg_init_one(&reqs[i].top, &mapping->req.unmap, top_size);
+		sg_init_one(&reqs[i].bottom, &mapping->req.unmap.tail, bottom_size);
+		i++;
+	}
+
+	ret = viommu_send_reqs_sync(vdomain->viommu, reqs, i, &nr_sent);
+	if (ret) {
+		BUG_ON(1);
+		return;
+	}
+
+	kfree(reqs);
+}
+
+void iommu_free_iova(unsigned long data)
+{
+	struct viommu_mapping *mapping = (struct viommu_mapping *)data;
+
+	kfree(mapping);
+}
+
 static int viommu_attach_dev(struct iommu_domain *domain, struct device *dev)
 {
 	int i;
@@ -717,6 +791,7 @@ static int viommu_attach_dev(struct iommu_domain *domain, struct device *dev)
 		 * owns it.
 		 */
 		ret = viommu_domain_finalise(vdev->viommu, domain);
+		init_llist_head(&vdomain->inv_queue);
 	} else if (vdomain->viommu != vdev->viommu) {
 		dev_err(dev, "cannot attach to foreign vIOMMU\n");
 		ret = -EXDEV;
@@ -841,6 +916,22 @@ static size_t viommu_unmap(struct iommu_domain *domain, unsigned long iova,
 		.virt_start	= cpu_to_le64(iova),
 		.virt_end	= cpu_to_le64(iova + unmapped - 1),
 	};
+
+	if (!viommu_unmap_flush) {
+		struct iommu_dma_cookie *cookie = domain->iova_cookie;
+		struct iova_domain *iovad = &cookie->iovad;
+		size_t page_shift = __ffs(domain->pgsize_bitmap);
+		size_t page_size = 1 << page_shift;
+		unsigned long iova_pfn, nrpages;
+
+		iova_pfn = iova >> page_shift;
+		nrpages = iommu_num_pages(iova, size, page_size);
+		nrpages = __roundup_pow_of_two(nrpages);
+		llist_add(&mapping->llist, &vdomain->inv_queue);
+		queue_iova(iovad, iova_pfn, nrpages, (unsigned long)mapping);
+
+		return unmapped;
+	}
 
 	ret = viommu_send_req_sync(vdomain->viommu, &mapping->req);
 
