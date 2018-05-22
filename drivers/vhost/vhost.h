@@ -62,6 +62,7 @@ struct vhost_umem_node {
 	__u64 start;
 	__u64 last;
 	__u64 size;
+	__u64 phys_addr;
 	__u64 userspace_addr;
 	__u32 perm;
 	__u32 flags_padding;
@@ -185,6 +186,13 @@ long vhost_dev_ioctl(struct vhost_dev *, unsigned int ioctl, void __user *argp);
 long vhost_vring_ioctl(struct vhost_dev *d, int ioctl, void __user *argp);
 int vhost_vq_access_ok(struct vhost_virtqueue *vq);
 int vhost_log_access_ok(struct vhost_dev *);
+
+static inline struct vhost_umem_node *vhost_iommu_translate(
+						struct vhost_iommu_as *as,
+						u64 addr, u64 end, int access)
+{
+	return NULL;
+}
 
 int vhost_get_vq_desc(struct vhost_virtqueue *,
 		      struct iovec iov[], unsigned int iov_count,

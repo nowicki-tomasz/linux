@@ -904,6 +904,22 @@ static void vhost_dev_unlock_vqs(struct vhost_dev *d)
 		mutex_unlock(&d->vqs[i]->mutex);
 }
 
+static void vhost_insert_umem_range(struct vhost_umem *umem,
+				    struct vhost_umem_node *node)
+{
+	struct vhost_umem_node *tmp;
+
+	if (umem->numem == max_iotlb_entries) {
+		tmp = list_first_entry(&umem->umem_list, typeof(*tmp), link);
+		vhost_umem_free(umem, tmp);
+	}
+
+	INIT_LIST_HEAD(&node->link);
+	list_add_tail(&node->link, &umem->umem_list);
+	vhost_umem_interval_tree_insert(node, &umem->umem_tree);
+	umem->numem++;
+}
+
 static int vhost_new_umem_range(struct vhost_umem *umem,
 				u64 start, u64 size, u64 end,
 				u64 userspace_addr, int perm)
@@ -924,6 +940,7 @@ static int vhost_new_umem_range(struct vhost_umem *umem,
 	node->userspace_addr = userspace_addr;
 	node->perm = perm;
 	node->iommu_owner = 0;
+	node->phys_addr = 0;
 	INIT_LIST_HEAD(&node->link);
 	list_add_tail(&node->link, &umem->umem_list);
 	vhost_umem_interval_tree_insert(node, &umem->umem_tree);
@@ -1165,10 +1182,29 @@ static void vhost_vq_meta_update(struct vhost_virtqueue *vq,
 		vq->meta_iotlb[type] = node;
 }
 
+static int vhost_iommu_fill_iotlb(struct vhost_dev *dev,
+				  struct vhost_umem_node *new)
+{
+	const struct vhost_umem_node *node;
+
+	/* Lookup userspace addr */
+	node = vhost_umem_interval_tree_iter_first(&dev->umem->umem_tree,
+			new->phys_addr, new->phys_addr + new->size - 1);
+	if (node == NULL || node->start > new->phys_addr)
+		return -ENOMEM;
+
+	new->userspace_addr = node->userspace_addr + new->phys_addr - node->start;
+	if (umem_access_ok(new->userspace_addr, new->size, VHOST_ACCESS_RW))
+		return -EFAULT;
+
+	vhost_insert_umem_range(dev->iotlb, new);
+	return 0;
+}
+
 static int iotlb_access_ok(struct vhost_virtqueue *vq,
 			   int access, u64 addr, u64 len, int type)
 {
-	const struct vhost_umem_node *node;
+	struct vhost_umem_node *node;
 	struct vhost_umem *umem = vq->iotlb;
 	u64 s = 0, size, orig_addr = addr, last = addr + len - 1;
 
@@ -1185,6 +1221,14 @@ static int iotlb_access_ok(struct vhost_virtqueue *vq,
 				return false;
 			}
 
+			node = vhost_iommu_translate(vq->dev->iommu_as,
+						    addr, addr + len - 1,
+						    access);
+			if (!node)
+				return false;
+
+			if (vhost_iommu_fill_iotlb(vq->dev, node))
+				return false;
 		} else if (!(node->perm & access)) {
 			/* Report the possible access violation by
 			 * request another translation from userspace.
@@ -1796,7 +1840,7 @@ EXPORT_SYMBOL_GPL(vhost_vq_init_access);
 static int translate_desc(struct vhost_virtqueue *vq, u64 addr, u32 len,
 			  struct iovec iov[], int iov_size, int access)
 {
-	const struct vhost_umem_node *node;
+	struct vhost_umem_node *node;
 	struct vhost_dev *dev = vq->dev;
 	struct vhost_umem *umem = dev->iotlb ? dev->iotlb : dev->umem;
 	struct iovec *_iov;
@@ -1823,6 +1867,17 @@ static int translate_desc(struct vhost_virtqueue *vq, u64 addr, u32 len,
 				break;
 			}
 
+			node = vhost_iommu_translate(dev->iommu_as, addr,
+						    addr + len - 1, access);
+			if (!node) {
+				ret = -EFAULT;
+				break;
+			}
+
+			if (vhost_iommu_fill_iotlb(vq->dev, node)) {
+				ret = -EFAULT;
+				break;
+			}
 		} else if (!(node->perm & access)) {
 			ret = -EPERM;
 			break;
