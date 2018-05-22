@@ -1646,6 +1646,16 @@ int vhost_init_device_iotlb(struct vhost_dev *d, bool enabled)
 }
 EXPORT_SYMBOL_GPL(vhost_init_device_iotlb);
 
+static int vhost_dev_attach_iommu(struct vhost_dev *d, void __user *argp)
+{
+	struct vhost_iommu_bind bind;
+
+	if (copy_from_user(&bind, argp, sizeof bind))
+		return -EFAULT;
+
+	return vhost_iommu_attach_dev(d, &bind);
+}
+
 /* Caller must have device mutex */
 long vhost_dev_ioctl(struct vhost_dev *d, unsigned int ioctl, void __user *argp)
 {
@@ -1669,6 +1679,8 @@ long vhost_dev_ioctl(struct vhost_dev *d, unsigned int ioctl, void __user *argp)
 	case VHOST_SET_MEM_TABLE:
 		r = vhost_set_memory(d, argp);
 		break;
+	case VHOST_IOMMU_ATTACH_DEV:
+		return vhost_dev_attach_iommu(d, argp);
 	case VHOST_SET_LOG_BASE:
 		if (copy_from_user(&p, argp, sizeof p)) {
 			r = -EFAULT;

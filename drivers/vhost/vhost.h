@@ -11,6 +11,7 @@
 #include <linux/uio.h>
 #include <linux/virtio_config.h>
 #include <linux/virtio_ring.h>
+#include <linux/virtio_iommu.h>
 #include <linux/atomic.h>
 
 struct vhost_work;
@@ -192,6 +193,11 @@ static inline struct vhost_umem_node *vhost_iommu_translate(
 						u64 addr, u64 end, int access)
 {
 	return NULL;
+}
+static inline int vhost_iommu_attach_dev(struct vhost_dev *dev,
+					 struct vhost_iommu_bind *bind)
+{
+	return -ENODEV;
 }
 void vhost_iommu_iotlb_inv(struct vhost_dev *dev,
 			   struct vhost_umem_node *node);
