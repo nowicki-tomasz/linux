@@ -572,7 +572,8 @@ static void vhost_umem_free(struct vhost_umem *umem,
 {
 	vhost_umem_interval_tree_remove(node, &umem->umem_tree);
 	list_del(&node->link);
-	kfree(node);
+	if (!node->iommu_owner)
+		kfree(node);
 	umem->numem--;
 }
 
@@ -922,6 +923,7 @@ static int vhost_new_umem_range(struct vhost_umem *umem,
 	node->last = end;
 	node->userspace_addr = userspace_addr;
 	node->perm = perm;
+	node->iommu_owner = 0;
 	INIT_LIST_HEAD(&node->link);
 	list_add_tail(&node->link, &umem->umem_list);
 	vhost_umem_interval_tree_insert(node, &umem->umem_tree);
