@@ -15,6 +15,7 @@
 #include <linux/compiler.h>
 #include <linux/ioctl.h>
 #include <linux/virtio_config.h>
+#include <linux/virtio_iommu.h>
 #include <linux/virtio_ring.h>
 
 struct vhost_vring_state {
@@ -56,6 +57,8 @@ struct vhost_iotlb_msg {
 #define VHOST_ACCESS_RO      0x1
 #define VHOST_ACCESS_WO      0x2
 #define VHOST_ACCESS_RW      0x3
+#define VHOST_ACCESS_EXEC    (1 << 2)
+#define VHOST_ACCESS_MMIO    (1 << 3)
 	__u8 perm;
 #define VHOST_IOTLB_MISS           1
 #define VHOST_IOTLB_UPDATE         2
@@ -213,5 +216,19 @@ struct vhost_iommu_bind {
     uint32_t                    iommu_fd;
     uint32_t                    devid;
 };
+
+struct vhost_iommu_xlate {
+    struct vhost_iotlb_msg      imsg;
+    uint32_t                    devid;
+};
+
+struct vhost_iommu_config {
+    struct virtio_iommu_config  config;
+};
+
+#define VHOST_IOMMU_ID      		_IOW(VHOST_VIRTIO, 0x80, __u32)
+#define VHOST_IOMMU_CONFIG		_IOW(VHOST_VIRTIO, 0x81, __u32)
 #define VHOST_IOMMU_ATTACH_DEV		_IOW(VHOST_VIRTIO, 0x82, __u32)
+#define VHOST_IOMMU_XLATE		_IOWR(VHOST_VIRTIO, 0x83, __u32)
+
 #endif
