@@ -188,6 +188,12 @@ long vhost_vring_ioctl(struct vhost_dev *d, int ioctl, void __user *argp);
 int vhost_vq_access_ok(struct vhost_virtqueue *vq);
 int vhost_log_access_ok(struct vhost_dev *);
 
+#ifdef CONFIG_VHOST_IOMMU
+struct vhost_umem_node *vhost_iommu_translate(struct vhost_iommu_as *as,
+					     u64 addr, u64 end, int access);
+int vhost_iommu_attach_dev(struct vhost_dev *dev,
+			   struct vhost_iommu_bind *bind);
+#else
 static inline struct vhost_umem_node *vhost_iommu_translate(
 						struct vhost_iommu_as *as,
 						u64 addr, u64 end, int access)
@@ -199,6 +205,7 @@ static inline int vhost_iommu_attach_dev(struct vhost_dev *dev,
 {
 	return -ENODEV;
 }
+#endif
 void vhost_iommu_iotlb_inv(struct vhost_dev *dev,
 			   struct vhost_umem_node *node);
 
