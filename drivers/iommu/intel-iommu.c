@@ -3438,10 +3438,10 @@ domains_done:
 				goto free_iommu;
 		}
 #endif
-		ret = dmar_set_interrupt(iommu);
+		ret = dmar_set_interrupt(iommu, true);
+
 		if (ret)
 			goto free_iommu;
-
 		if (!translation_pre_enabled(iommu))
 			iommu_enable_translation(iommu);
 
@@ -4314,7 +4314,7 @@ static int intel_iommu_add(struct dmar_drhd_unit *dmaru)
 			goto disable_iommu;
 	}
 #endif
-	ret = dmar_set_interrupt(iommu);
+	ret = dmar_set_interrupt(iommu, true);
 	if (ret)
 		goto disable_iommu;
 
