@@ -14,6 +14,7 @@
 
 #include <linux/types.h>
 #include <linux/ioctl.h>
+#include <linux/iommu.h>
 
 #define VFIO_API_VERSION	0
 
@@ -740,6 +741,12 @@ struct vfio_iommu_type1_bind {
  * Undo what was done by the corresponding VFIO_IOMMU_BIND ioctl.
  */
 #define VFIO_IOMMU_UNBIND	_IO(VFIO_TYPE, VFIO_BASE + 23)
+
+struct vfio_iommu_type1_tlb_invalidate {
+	__u32	argsz;
+	struct tlb_invalidate_info info;
+};
+#define VFIO_IOMMU_TLB_INVALIDATE	_IO(VFIO_TYPE, VFIO_BASE + 26)
 
 /* -------- Additional API for SPAPR TCE (Server POWERPC) IOMMU -------- */
 

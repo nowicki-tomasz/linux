@@ -2044,6 +2044,42 @@ static long vfio_iommu_type1_unbind_process(struct vfio_iommu *iommu,
 	return ret;
 }
 
+static long vfio_iommu_type1_tlb_invalidate(struct vfio_iommu *iommu,
+					    struct tlb_invalidate_info *tlbi)
+{
+	int ret = -ENODEV;
+	struct vfio_domain *domain;
+
+	if (tlbi->hdr.version > 2)
+		return -EINVAL;
+
+	if (tlbi->granularity >= IOMMU_INV_NR_GRANU)
+		return -EINVAL;
+
+	if (tlbi->hdr.type >= IOMMU_INV_NR_TYPE)
+		return -EINVAL;
+
+	if (tlbi->flags & ~(IOMMU_INVALIDATE_ADDR_LEAF |
+			    IOMMU_INVALIDATE_GLOBAL_PAGE))
+		return -EINVAL;
+
+	/* Forbidden combination */
+	if (tlbi->granularity == IOMMU_INV_GRANU_PAGE_PASID &&
+	    tlbi->hdr.type == IOMMU_INV_TYPE_PASID)
+		return -EINVAL;
+
+	mutex_lock(&iommu->lock);
+	list_for_each_entry(domain, &iommu->domain_list, next) {
+		/* TODO: dev? */
+		ret = iommu_sva_invalidate(domain->domain, NULL, tlbi);
+		if (ret)
+			break;
+	}
+	mutex_unlock(&iommu->lock);
+
+	return ret;
+}
+
 static long vfio_iommu_type1_ioctl(void *iommu_data,
 				   unsigned int cmd, unsigned long arg)
 {
@@ -2152,6 +2188,19 @@ static long vfio_iommu_type1_ioctl(void *iommu_data,
 		default:
 			return -EINVAL;
 		}
+
+	} else if (cmd == VFIO_IOMMU_TLB_INVALIDATE) {
+		struct vfio_iommu_type1_tlb_invalidate inval;
+
+		minsz = offsetofend(struct vfio_iommu_type1_tlb_invalidate, info);
+
+		if (copy_from_user(&inval, (void __user *)arg, minsz))
+			return -EFAULT;
+
+		if (inval.argsz < minsz)
+			return -EINVAL;
+
+		return vfio_iommu_type1_tlb_invalidate(iommu, &inval.info);
 	}
 
 	return -ENOTTY;
