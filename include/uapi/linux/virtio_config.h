@@ -79,4 +79,10 @@
  * Does the device support Single Root I/O Virtualization?
  */
 #define VIRTIO_F_SR_IOV			37
+
+/*
+ * If set, each virtqueue can have its own IOMMU translation table, indexed by
+ * PASID.
+ */
+#define VIRTIO_F_PASID			38
 #endif /* _UAPI_LINUX_VIRTIO_CONFIG_H */

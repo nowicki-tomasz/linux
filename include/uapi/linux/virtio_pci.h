@@ -99,6 +99,9 @@
 /* Vector value used to disable MSI for queue */
 #define VIRTIO_MSI_NO_VECTOR            0xffff
 
+#define VIRTIO_PASID_INVALID		(1U << 31)
+#define VIRTIO_PASID_MASK		((1U << 20) - 1)
+
 #ifndef VIRTIO_PCI_NO_MODERN
 
 /* IDs for different capabilities.  Must all exist. */
@@ -155,6 +158,7 @@ struct virtio_pci_common_cfg {
 	__le32 queue_avail_hi;		/* read-write */
 	__le32 queue_used_lo;		/* read-write */
 	__le32 queue_used_hi;		/* read-write */
+	__le32 pasid;			/* read-write */
 };
 
 /* Fields in VIRTIO_PCI_CAP_PCI_CFG: */
@@ -193,6 +197,7 @@ struct virtio_pci_cfg_cap {
 #define VIRTIO_PCI_COMMON_Q_AVAILHI	44
 #define VIRTIO_PCI_COMMON_Q_USEDLO	48
 #define VIRTIO_PCI_COMMON_Q_USEDHI	52
+#define VIRTIO_PCI_COMMON_Q_PASID	56
 
 #endif /* VIRTIO_PCI_NO_MODERN */
 
