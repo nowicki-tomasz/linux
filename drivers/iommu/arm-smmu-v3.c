@@ -3841,6 +3841,122 @@ static unsigned long arm_smmu_resource_size(struct arm_smmu_device *smmu)
 		return SZ_128K;
 }
 
+static inline struct arm_smmu_device *dev_to_arm_smmu(struct device *dev)
+{
+	struct iommu_device *iommu_dev = dev_to_iommu_device(dev);
+
+	return container_of(iommu_dev, struct arm_smmu_device, iommu);
+}
+
+static ssize_t arm_smmu_show_stall(struct device *dev,
+				   struct device_attribute *attr, char *buf)
+{
+	struct arm_smmu_device *smmu = dev_to_arm_smmu(dev);
+
+	return sprintf(buf, "%s\n", smmu->features & ARM_SMMU_FEAT_STALL_FORCE ?
+		       "force" : smmu->features & ARM_SMMU_FEAT_STALLS ?
+		       "enabled" : "disabled");
+}
+static DEVICE_ATTR(stall, S_IRUGO, arm_smmu_show_stall, NULL);
+
+static ssize_t arm_smmu_show_httu(struct device *dev,
+				  struct device_attribute *attr, char *buf)
+{
+	struct arm_smmu_device *smmu = dev_to_arm_smmu(dev);
+
+	return sprintf(buf, "%s\n", smmu->features & ARM_SMMU_FEAT_HD ?
+		       "access+dirty" : smmu->features & ARM_SMMU_FEAT_HA ?
+		       "access" : "none");
+}
+static DEVICE_ATTR(httu, S_IRUGO, arm_smmu_show_httu, NULL);
+
+static ssize_t arm_smmu_show_asid_bits(struct device *dev,
+				       struct device_attribute *attr, char *buf)
+{
+	struct arm_smmu_device *smmu = dev_to_arm_smmu(dev);
+
+	return sprintf(buf, "%u\n", smmu->asid_bits);
+}
+static DEVICE_ATTR(asid_bits, S_IRUGO, arm_smmu_show_asid_bits, NULL);
+
+static ssize_t arm_smmu_show_ssid_bits(struct device *dev,
+				       struct device_attribute *attr, char *buf)
+{
+	struct arm_smmu_device *smmu = dev_to_arm_smmu(dev);
+
+	return sprintf(buf, "%u\n", smmu->ssid_bits);
+}
+static DEVICE_ATTR(ssid_bits, S_IRUGO, arm_smmu_show_ssid_bits, NULL);
+
+static ssize_t arm_smmu_show_btm(struct device *dev,
+				 struct device_attribute *attr, char *buf)
+{
+	struct arm_smmu_device *smmu = dev_to_arm_smmu(dev);
+
+	return sprintf(buf, "%s\n", smmu->features & ARM_SMMU_FEAT_BTM ?
+		       "enabled" : "disabled");
+}
+static DEVICE_ATTR(btm, S_IRUGO, arm_smmu_show_btm, NULL);
+
+static ssize_t arm_smmu_show_pgtable_format(struct device *dev,
+					    struct device_attribute *attr,
+					    char *buf)
+{
+	return sprintf(buf, "%d\n", ARM_64_LPAE_S1);
+}
+static DEVICE_ATTR(pgtable_format, S_IRUGO, arm_smmu_show_pgtable_format, NULL);
+
+static ssize_t arm_smmu_show_ctx_format(struct device *dev,
+					struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", 1); // FIXME: SV3
+}
+static DEVICE_ATTR(ctx_format, S_IRUGO, arm_smmu_show_ctx_format, NULL);
+
+static ssize_t arm_smmu_show_output_bits(struct device *dev,
+					 struct device_attribute *attr,
+					 char *buf)
+{
+	struct arm_smmu_device *smmu = dev_to_arm_smmu(dev);
+
+	/* Output size for stage-1 */
+	return sprintf(buf, "%lu\n", smmu->ias);
+}
+static DEVICE_ATTR(output_bits, S_IRUGO, arm_smmu_show_output_bits, NULL);
+
+static ssize_t arm_smmu_show_input_bits(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	/* Input size for stage-1 */
+	return sprintf(buf, "%u\n", VA_BITS);
+}
+static DEVICE_ATTR(input_bits, S_IRUGO, arm_smmu_show_input_bits, NULL);
+
+static struct attribute *arm_smmu_attrs[] = {
+	&dev_attr_stall.attr,
+	&dev_attr_httu.attr,
+	&dev_attr_asid_bits.attr,
+	&dev_attr_btm.attr,
+	&dev_attr_pgtable_format.attr,
+	&dev_attr_ctx_format.attr,
+
+	&dev_attr_ssid_bits.attr,
+	&dev_attr_input_bits.attr,
+	&dev_attr_output_bits.attr,
+	NULL,
+};
+
+const struct attribute_group arm_smmu_attr_group = {
+	.name	= "arm-smmu-v3",
+	.attrs	= arm_smmu_attrs,
+};
+
+const struct attribute_group *arm_smmu_attr_groups[] = {
+	&arm_smmu_attr_group,
+	NULL,
+};
+
 static int arm_smmu_device_probe(struct platform_device *pdev)
 {
 	int irq, ret;
@@ -3925,7 +4041,7 @@ static int arm_smmu_device_probe(struct platform_device *pdev)
 	}
 
 	/* And we're up. Go go go! */
-	ret = iommu_device_sysfs_add(&smmu->iommu, dev, NULL,
+	ret = iommu_device_sysfs_add(&smmu->iommu, dev, arm_smmu_attr_groups,
 				     "smmu3.%pa", &ioaddr);
 	if (ret)
 		return ret;

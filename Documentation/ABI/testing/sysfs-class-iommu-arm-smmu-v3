@@ -1,0 +1,69 @@
+What:		/sys/class/iommu/<iommu>/arm-smmu-v3/stall
+Date:		December 2017
+KernelVersion:	??
+Contact:	Jean-Philippe Brucker <jean-philippe.brucker@arm.com>
+Description:
+		If "enabled", stall model is supported by the SMMU and
+		available to stall-capable devices. If "force", stall model is
+		forced for all devices. If "disabled", stall model isn't
+		available.
+
+What:		/sys/class/iommu/<iommu>/arm-smmu-v3/httu
+Date:		December 2017
+KernelVersion:	??
+Contact:	Jean-Philippe Brucker <jean-philippe.brucker@arm.com>
+Description:
+		Hardware Translation Table Update feature. "access+dirty",
+		"access" or "none".
+
+What:		/sys/class/iommu/<iommu>/arm-smmu-v3/asid_bits
+Date:		December 2017
+KernelVersion:	??
+Contact:	Jean-Philippe Brucker <jean-philippe.brucker@arm.com>
+Description:
+		Number of ASID bits supported. Format: %d
+
+What:		/sys/class/iommu/<iommu>/arm-smmu-v3/ssid_bits
+Date:		December 2017
+KernelVersion:	??
+Contact:	Jean-Philippe Brucker <jean-philippe.brucker@arm.com>
+Description:
+		Number of SSID bits supported. Format: %d
+
+What:		/sys/class/iommu/<iommu>/arm-smmu-v3/btm
+Date:		December 2017
+KernelVersion:	??
+Contact:	Jean-Philippe Brucker <jean-philippe.brucker@arm.com>
+Description:
+		Broadcast TLB maintenance is "enabled" or "disabled".
+
+What:		/sys/class/iommu/<iommu>/arm-smmu-v3/pgtable_format
+Date:		December 2017
+KernelVersion:	??
+Contact:	Jean-Philippe Brucker <jean-philippe.brucker@arm.com>
+Description:
+		Preferred page table format. TODO: what are the values?
+		Format: %d
+
+What:		/sys/class/iommu/<iommu>/arm-smmu-v3/ctx_format
+Date:		December 2017
+KernelVersion:	??
+Contact:	Jean-Philippe Brucker <jean-philippe.brucker@arm.com>
+Description:
+		Preferred context descriptor format. TODO: values?
+		Format: %d
+
+What:		/sys/class/iommu/<iommu>/arm-smmu-v3/input_bits
+Date:		December 2017
+KernelVersion:	??
+Contact:	Jean-Philippe Brucker <jean-philippe.brucker@arm.com>
+Description:
+		Stage-1 input address size, in bits. Format: %d
+
+What:		/sys/class/iommu/<iommu>/arm-smmu-v3/output_bits
+Date:		December 2017
+KernelVersion:	??
+Contact:	Jean-Philippe Brucker <jean-philippe.brucker@arm.com>
+Description:
+		Stage-1 output address size, in bits. Format: %d
+
