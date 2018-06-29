@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Virtio-iommu definition v0.8
+ * Virtio-iommu definition v0.9-devel
  *
  * Copyright (C) 2018 Arm Ltd.
  */
@@ -15,6 +15,7 @@
 #define VIRTIO_IOMMU_F_MAP_UNMAP		2
 #define VIRTIO_IOMMU_F_BYPASS			3
 #define VIRTIO_IOMMU_F_PROBE			4
+#define VIRTIO_IOMMU_F_ATTACH_TABLE		5
 
 struct virtio_iommu_config {
 	/* Supported page sizes */
@@ -37,6 +38,8 @@ struct virtio_iommu_config {
 #define VIRTIO_IOMMU_T_MAP			0x03
 #define VIRTIO_IOMMU_T_UNMAP			0x04
 #define VIRTIO_IOMMU_T_PROBE			0x05
+#define VIRTIO_IOMMU_T_ATTACH_TABLE		0x06
+#define VIRTIO_IOMMU_T_INVALIDATE		0x07
 
 /* Status types */
 #define VIRTIO_IOMMU_S_OK			0x00
@@ -73,6 +76,35 @@ struct virtio_iommu_req_detach {
 	struct virtio_iommu_req_tail		tail;
 };
 
+struct virtio_iommu_req_attach_table {
+	struct virtio_iommu_req_head		head;
+	__le32					domain;
+	__le32					endpoint;
+	__le16					format;
+	__u8					reserved[62];
+	struct virtio_iommu_req_tail		tail;
+};
+
+/* Arm SMMUv3 PASID Table Descriptor */
+struct virtio_iommu_req_attach_pst_arm {
+	struct virtio_iommu_req_head		head;
+	__le32					domain;
+	__le32					endpoint;
+	__le16					format;
+#define VIRTIO_IOMMU_PSTF_ARM_SV3_LINEAR	0x0
+#define VIRTIO_IOMMU_PSTF_ARM_SV3_4KL2		0x1
+#define VIRTIO_IOMMU_PSTF_ARM_SV3_64KL2		0x2
+	__u8					s1fmt;
+#define VIRTIO_IOMMU_PSTF_ARM_SV3_DSS_TERM	0x0
+#define VIRTIO_IOMMU_PSTF_ARM_SV3_DSS_BYPASS	0x1
+#define VIRTIO_IOMMU_PSTF_ARM_SV3_DSS_0		0x2
+	__u8					s1dss;
+	__le64					s1contextptr;
+	__le32					s1cdmax;
+	__u8					reserved[48];
+	struct virtio_iommu_req_tail		tail;
+};
+
 #define VIRTIO_IOMMU_MAP_F_READ			(1 << 0)
 #define VIRTIO_IOMMU_MAP_F_WRITE		(1 << 1)
 #define VIRTIO_IOMMU_MAP_F_EXEC			(1 << 2)
@@ -104,6 +136,12 @@ struct virtio_iommu_req_unmap {
 
 #define VIRTIO_IOMMU_PROBE_T_NONE		0
 #define VIRTIO_IOMMU_PROBE_T_RESV_MEM		1
+#define VIRTIO_IOMMU_PROBE_T_PAGE_SIZE_MASK	2
+#define VIRTIO_IOMMU_PROBE_T_INPUT_RANGE	3
+#define VIRTIO_IOMMU_PROBE_T_OUTPUT_SIZE	4
+#define VIRTIO_IOMMU_PROBE_T_PASID_SIZE		5
+#define VIRTIO_IOMMU_PROBE_T_PAGE_TABLE_FMT	6
+#define VIRTIO_IOMMU_PROBE_T_PASID_TABLE_FMT	7
 
 #define VIRTIO_IOMMU_PROBE_T_MASK		0xfff
 
@@ -123,6 +161,66 @@ struct virtio_iommu_probe_resv_mem {
 	__le64					end;
 };
 
+struct virtio_iommu_probe_page_size_mask {
+	struct virtio_iommu_probe_property	head;
+	__u8					reserved[4];
+	__le64					mask;
+};
+
+struct virtio_iommu_probe_input_range {
+	struct virtio_iommu_probe_property	head;
+	__u8					reserved[4];
+	__le64					start;
+	__le64					end;
+};
+
+struct virtio_iommu_probe_output_size {
+	struct virtio_iommu_probe_property	head;
+	__u8					bits;
+	__u8					reserved[3];
+};
+
+struct virtio_iommu_probe_pasid_size {
+	struct virtio_iommu_probe_property	head;
+	__u8					bits;
+	__u8					reserved[3];
+};
+
+struct virtio_iommu_probe_table_format {
+	struct virtio_iommu_probe_property	head;
+#define VIRTIO_IOMMU_PGTF_ARM_LPAE		1
+#define VIRTIO_IOMMU_PSTF_ARM_SV3		2
+	__le16					format;
+	__u8					reserved[2];
+};
+
+/* Arm LPAE Page Table Format */
+struct virtio_iommu_probe_pgtf_arm {
+	struct virtio_iommu_probe_property	head;
+	__le16					format;
+	__u8					asid_bits;
+	__u8					reserved[1];
+
+#define VIRTIO_IOMMU_PGTF_ARM_LPAE_F_HW_ACCESS	(1ULL << 0)
+#define VIRTIO_IOMMU_PGTF_ARM_LPAE_F_HW_DIRTY	(1ULL << 1)
+#define VIRTIO_IOMMU_PGTF_ARM_LPAE_F_HW_FLOAT	(1ULL << 2)
+#define VIRTIO_IOMMU_PGTF_ARM_LPAE_F_HPD	(1ULL << 3)
+	__le64					flags;
+};
+
+/* Arm SMMUv3 PASID Table Format */
+struct virtio_iommu_probe_pstf_arm {
+	struct virtio_iommu_probe_property	head;
+	__le16					format;
+	__u8					reserved[2];
+
+	/* Info needed for populating the table */
+#define VIRTIO_IOMMU_PSTF_ARM_SV3_F_STALL	(1ULL << 0)
+#define VIRTIO_IOMMU_PSTF_ARM_SV3_F_STALL_FORCE	(1ULL << 1)
+#define VIRTIO_IOMMU_PSTF_ARM_SV3_F_BTM		(1ULL << 2)
+	__le64					flags;
+};
+
 struct virtio_iommu_req_probe {
 	struct virtio_iommu_req_head		head;
 	__le32					endpoint;
@@ -134,6 +232,30 @@ struct virtio_iommu_req_probe {
 	 * Tail follows the variable-length properties array. No padding,
 	 * property lengths are all aligned on 8 bytes.
 	 */
+};
+
+#define VIRTIO_IOMMU_INVAL_S_DOMAIN		(1 << 0)
+/* 'pasid', 'id' are valid */
+#define VIRTIO_IOMMU_INVAL_S_PASID		(1 << 1)
+/* 'pasid', 'id', 'virt_start', 'nr_pages' and 'granule' are valid */
+#define VIRTIO_IOMMU_INVAL_S_VA			(1 << 2)
+
+#define VIRTIO_IOMMU_INVAL_F_CONFIG		(1 << 0)
+#define VIRTIO_IOMMU_INVAL_F_LEAF		(1 << 1)
+
+struct virtio_iommu_req_invalidate {
+	struct virtio_iommu_req_head		head;
+	__le16					scope;
+	__le16					flags;
+	__le32					domain;
+	__le32					pasid;
+	__le64					id;
+	__le64					virt_start;
+	__le64					nr_pages;
+	/* Page size, in nr of bits, typically 12 for 4k, 30 for 2MB, etc.) */
+	__u8					granule;
+	__u8					reserved[19];
+	struct virtio_iommu_req_tail		tail;
 };
 
 /* Fault types */
