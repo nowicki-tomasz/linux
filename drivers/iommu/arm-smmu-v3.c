@@ -42,6 +42,7 @@
 #include <linux/pci-ats.h>
 #include <linux/platform_device.h>
 #include <linux/sched/mm.h>
+#include <linux/vfio.h>
 
 #include <linux/amba/bus.h>
 
@@ -230,6 +231,7 @@
 #define STRTAB_STE_0_CFG_BYPASS		4
 #define STRTAB_STE_0_CFG_S1_TRANS	5
 #define STRTAB_STE_0_CFG_S2_TRANS	6
+#define STRTAB_STE_0_CFG_NESTED		7
 
 #define STRTAB_STE_0_S1FMT		GENMASK_ULL(5, 4)
 #define STRTAB_STE_0_S1CTXPTR_MASK	GENMASK_ULL(51, 6)
@@ -551,6 +553,7 @@ struct arm_smmu_strtab_ent {
 	 * configured according to the domain type.
 	 */
 	bool				assigned;
+	bool				nest;
 	struct arm_smmu_s1_cfg		*s1_cfg;
 	struct arm_smmu_s2_cfg		*s2_cfg;
 
@@ -668,10 +671,8 @@ struct arm_smmu_domain {
 	struct io_pgtable_ops		*pgtbl_ops;
 
 	enum arm_smmu_domain_stage	stage;
-	union {
-		struct arm_smmu_s1_cfg	s1_cfg;
-		struct arm_smmu_s2_cfg	s2_cfg;
-	};
+	struct arm_smmu_s1_cfg		s1_cfg;
+	struct arm_smmu_s2_cfg		s2_cfg;
 
 	struct iommu_domain		domain;
 
@@ -1188,6 +1189,18 @@ static void arm_smmu_write_strtab_ent(struct arm_smmu_device *smmu, u32 sid,
 	 * 1. Update Config, return (init time STEs aren't live)
 	 * 2. Write everything apart from dword 0, sync, write dword 0, sync
 	 * 3. Update Config, sync
+	 *
+	 * ---
+	 * Wait, there is more!
+	 * Now with nested, we update live STEs:
+	 * 1. Initially setup s2_cfg alone
+	 *    -> Write qwords 2, 3, and then 0 (s2)
+	 *  2. Then add a context desc. table
+	 *    -> Write qword 1
+	 *       then replace qword 0 atomically (nest)
+	 *  3. Then remove the context desc. table
+	 *    -> Replace qword 0 atomically (s2)
+	 * 4. And finally, switch back to bypass
 	 */
 	u64 val = le64_to_cpu(dst[0]);
 	bool ste_live = false;
@@ -1204,10 +1217,11 @@ static void arm_smmu_write_strtab_ent(struct arm_smmu_device *smmu, u32 sid,
 			break;
 		case STRTAB_STE_0_CFG_S1_TRANS:
 		case STRTAB_STE_0_CFG_S2_TRANS:
+		case STRTAB_STE_0_CFG_NESTED:
 			ste_live = true;
 			break;
 		case STRTAB_STE_0_CFG_ABORT:
-			if (disable_bypass)
+			if (disable_bypass || ste->nest)
 				break;
 		default:
 			BUG(); /* STE corruption */
@@ -1237,6 +1251,17 @@ static void arm_smmu_write_strtab_ent(struct arm_smmu_device *smmu, u32 sid,
 		return;
 	}
 
+	if (ste->nest && ste_live) {
+		/*
+		 * When enabling nested, the STE may be transitionning from
+		 * s2 to nested and back. Disable the STE before changing it.
+		 */
+		dst[0] = cpu_to_le64(STRTAB_STE_0_CFG_ABORT);
+		arm_smmu_sync_ste_for_sid(smmu, sid);
+		ste_live = false;
+	}
+	BUG_ON(ste->nest && !ste->s2_cfg);
+
 	if (ste->s1_cfg) {
 		struct iommu_pasid_table_cfg *cfg = &ste->s1_cfg->tables;
 		int strw = smmu->features & ARM_SMMU_FEAT_E2H ?
@@ -1244,7 +1269,7 @@ static void arm_smmu_write_strtab_ent(struct arm_smmu_device *smmu, u32 sid,
 
 		BUG_ON(ste_live);
 		dst[1] = cpu_to_le64(
-			 FIELD_PREP(STRTAB_STE_1_S1DSS, STRTAB_STE_1_S1DSS_SSID0) |
+			 FIELD_PREP(STRTAB_STE_1_S1DSS, cfg->arm_smmu.s1dss) |
 			 FIELD_PREP(STRTAB_STE_1_S1CIR, STRTAB_STE_1_S1C_CACHE_WBRA) |
 			 FIELD_PREP(STRTAB_STE_1_S1COR, STRTAB_STE_1_S1C_CACHE_WBRA) |
 			 FIELD_PREP(STRTAB_STE_1_S1CSH, ARM_SMMU_SH_ISH) |
@@ -1258,8 +1283,7 @@ static void arm_smmu_write_strtab_ent(struct arm_smmu_device *smmu, u32 sid,
 		   !ste->can_stall)
 			dst[1] |= cpu_to_le64(STRTAB_STE_1_S1STALLD);
 
-		val |= (ste->s1_cfg->tables.base & STRTAB_STE_0_S1CTXPTR_MASK) |
-			FIELD_PREP(STRTAB_STE_0_CFG, STRTAB_STE_0_CFG_S1_TRANS) |
+		val |= (cfg->base & STRTAB_STE_0_S1CTXPTR_MASK) |
 			FIELD_PREP(STRTAB_STE_0_S1CDMAX, cfg->order) |
 			FIELD_PREP(STRTAB_STE_0_S1FMT, cfg->arm_smmu.s1fmt);
 	}
@@ -1276,9 +1300,12 @@ static void arm_smmu_write_strtab_ent(struct arm_smmu_device *smmu, u32 sid,
 			 STRTAB_STE_2_S2R);
 
 		dst[3] = cpu_to_le64(ste->s2_cfg->vttbr & STRTAB_STE_3_S2TTB_MASK);
-
-		val |= FIELD_PREP(STRTAB_STE_0_CFG, STRTAB_STE_0_CFG_S2_TRANS);
 	}
+
+	val |= FIELD_PREP(STRTAB_STE_0_CFG,
+			  ste->s1_cfg ? (ste->nest ? STRTAB_STE_0_CFG_NESTED :
+					 STRTAB_STE_0_CFG_S1_TRANS) :
+			  ste->s2_cfg ? STRTAB_STE_0_CFG_S2_TRANS : 0);
 
 	if (IS_ENABLED(CONFIG_PCI_ATS))
 		dst[1] |= cpu_to_le64(FIELD_PREP(STRTAB_STE_1_EATS,
@@ -2044,6 +2071,7 @@ static int arm_smmu_domain_finalise_s1(struct arm_smmu_domain *smmu_domain,
 			.asid_bits	= smmu->asid_bits,
 			.hw_access	= !!(smmu->features & ARM_SMMU_FEAT_HA),
 			.hw_dirty	= !!(smmu->features & ARM_SMMU_FEAT_HD),
+			.s1dss		= ARM_SMMU_S1DSS_SSID0,
 		},
 	};
 
@@ -2268,6 +2296,7 @@ static int arm_smmu_attach_dev(struct iommu_domain *domain, struct device *dev)
 	}
 
 	ste->assigned = true;
+	ste->nest = (smmu_domain->stage == ARM_SMMU_DOMAIN_NESTED);
 	master->domain = smmu_domain;
 
 	spin_lock_irqsave(&smmu_domain->devices_lock, flags);
@@ -2622,6 +2651,84 @@ int arm_smmu_handle_invalidate(struct iommu_domain *domain, struct device *dev,
 	default:
 		return -EINVAL;
 	}
+
+	return 0;
+}
+
+static void arm_smmu_unbind_table(struct iommu_domain *domain,
+				  struct device *dev)
+{
+	bool dirty = false;
+	unsigned long flags;
+	struct arm_smmu_master_data *master;
+	struct arm_smmu_domain *smmu_domain = to_smmu_domain(domain);
+	struct tlb_invalidate_info inv = {
+		.hdr.version	= TLB_INV_HDR_VERSION_2,
+		.hdr.type	= IOMMU_INV_TYPE_PASID,
+		.granularity	= IOMMU_INV_GRANU_DOMAIN_ALL_PASID,
+	};
+	/*
+	 * Collect garbage.
+	 * TODO: reset PRI or reset stall.
+	 */
+
+	mutex_lock(&smmu_domain->init_mutex);
+	spin_lock_irqsave(&smmu_domain->devices_lock, flags);
+	list_for_each_entry(master, &smmu_domain->devices, domain_head) {
+		if (!master->ste.s1_cfg)
+			continue;
+
+		dirty = true;
+		master->ste.s1_cfg = NULL;
+		arm_smmu_install_ste_for_dev(master->dev->iommu_fwspec);
+	}
+	spin_unlock_irqrestore(&smmu_domain->devices_lock, flags);
+	mutex_unlock(&smmu_domain->init_mutex);
+
+	/* Then clear CD cache, TLBs and ATCs */
+	if (dirty)
+		arm_smmu_handle_invalidate(&smmu_domain->domain, dev, &inv);
+}
+
+static int arm_smmu_bind_table(struct iommu_domain *domain,
+			       struct device *dev,
+			       struct pasid_table_config *config)
+{
+	unsigned long flags;
+	struct arm_smmu_master_data *master;
+	struct arm_smmu_domain *smmu_domain = to_smmu_domain(domain);
+
+	if (smmu_domain->stage != ARM_SMMU_DOMAIN_NESTED)
+		return -EINVAL;
+
+	if (config->model != PASID_TABLE_MODEL_ARM)
+		return -EINVAL;
+
+	if (config->arm_smmu_v3.s1fmt > ARM_SMMU_S1FMT_64K_L2 ||
+	    config->arm_smmu_v3.s1dss > ARM_SMMU_S1DSS_SSID0)
+		return -EINVAL;
+
+	arm_smmu_unbind_table(domain, dev);
+
+	smmu_domain->s1_cfg = (struct arm_smmu_s1_cfg) {
+		.tables = {
+			.order	= config->pasid_bits,
+			/* This is the GPA provided by the guest. */
+			.base	= config->base_ptr,
+
+			.arm_smmu.s1fmt = config->arm_smmu_v3.s1fmt,
+			.arm_smmu.s1dss = config->arm_smmu_v3.s1dss,
+		},
+	};
+
+	mutex_lock(&smmu_domain->init_mutex);
+	spin_lock_irqsave(&smmu_domain->devices_lock, flags);
+	list_for_each_entry(master, &smmu_domain->devices, domain_head) {
+		master->ste.s1_cfg = &smmu_domain->s1_cfg;
+		arm_smmu_install_ste_for_dev(master->dev->iommu_fwspec);
+	}
+	spin_unlock_irqrestore(&smmu_domain->devices_lock, flags);
+	mutex_unlock(&smmu_domain->init_mutex);
 
 	return 0;
 }
@@ -3048,6 +3155,8 @@ static struct iommu_ops arm_smmu_ops = {
 	.mm_attach		= arm_smmu_mm_attach,
 	.mm_detach		= arm_smmu_mm_detach,
 	.mm_invalidate		= arm_smmu_mm_invalidate,
+	.bind_pasid_table	= arm_smmu_bind_table,
+	.unbind_pasid_table	= arm_smmu_unbind_table,
 	.sva_invalidate		= arm_smmu_handle_invalidate,
 	.page_response		= arm_smmu_page_response,
 	.map			= arm_smmu_map,

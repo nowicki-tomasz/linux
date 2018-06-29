@@ -93,6 +93,10 @@ struct arm_smmu_context_cfg {
 #define ARM_SMMU_S1FMT_4K_L2		0x1
 #define ARM_SMMU_S1FMT_64K_L2		0x2
 	u8				s1fmt;
+#define ARM_SMMU_S1DSS_TERMINATE	0x0
+#define ARM_SMMU_S1DSS_BYPASS		0x1
+#define ARM_SMMU_S1DSS_SSID0		0x2
+	u8				s1dss;
 };
 
 /**
