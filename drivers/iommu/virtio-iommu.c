@@ -28,6 +28,8 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/virtio_iommu.h>
 
+#include "iommu-pasid-table.h"
+
 #define MSI_IOVA_BASE			0x8000000
 #define MSI_IOVA_LENGTH			0x100000
 
@@ -54,6 +56,8 @@ struct viommu_dev {
 	u64				pgsize_bitmap;
 	u8				domain_bits;
 	u32				probe_size;
+
+	bool				has_table:1;
 };
 
 struct viommu_mapping {
@@ -67,6 +71,8 @@ struct viommu_domain {
 	struct viommu_dev		*viommu;
 	struct mutex			mutex;
 	unsigned int			id;
+
+	struct iommu_pasid_entry	*pgtable_entry;
 
 	spinlock_t			mappings_lock;
 	struct rb_root_cached		mappings;
@@ -679,6 +685,110 @@ static void viommu_event_handler(struct virtqueue *vq)
 		dev_err(viommu->dev, "kick failed\n");
 }
 
+/* PASID and pgtable APIs */
+
+static void __viommu_flush_pasid_tlb_all(struct viommu_domain *vdomain,
+					 int pasid, u64 tag)
+{
+	struct virtio_iommu_req_invalidate req = {
+		.head.type	= VIRTIO_IOMMU_T_INVALIDATE,
+		.scope		= cpu_to_le32(VIRTIO_IOMMU_INVAL_S_PASID),
+
+		.domain		= cpu_to_le32(vdomain->id),
+		.pasid		= cpu_to_le32(pasid),
+		.id		= cpu_to_le64(tag),
+	};
+
+	if (viommu_send_req_sync(vdomain->viommu, &req, sizeof(req)))
+		pr_debug("could not send invalidate request\n");
+}
+
+static void viommu_flush_pasid_tlb_all(void *cookie, int pasid,
+				       struct iommu_pasid_entry *entry)
+{
+	__viommu_flush_pasid_tlb_all(cookie, pasid, entry->tag);
+}
+
+static void viommu_flush_pasid(void *cookie, int pasid, bool leaf)
+{
+	struct viommu_domain *vdomain = cookie;
+	struct virtio_iommu_req_invalidate req = {
+		.head.type	= VIRTIO_IOMMU_T_INVALIDATE,
+		.scope		= cpu_to_le32(VIRTIO_IOMMU_INVAL_S_PASID),
+		.flags		= cpu_to_le32(VIRTIO_IOMMU_INVAL_F_CONFIG),
+
+		.domain		= cpu_to_le32(vdomain->id),
+		.pasid		= cpu_to_le32(pasid),
+	};
+
+	if (viommu_send_req_sync(vdomain->viommu, &req, sizeof(req)))
+		pr_debug("could not send invalidate request\n");
+}
+
+static void viommu_flush_pasid_all(void *cookie)
+{
+	struct viommu_domain *vdomain = cookie;
+	struct virtio_iommu_req_invalidate req = {
+		.head.type	= VIRTIO_IOMMU_T_INVALIDATE,
+		.scope		= cpu_to_le32(VIRTIO_IOMMU_INVAL_S_DOMAIN),
+		.flags		= cpu_to_le32(VIRTIO_IOMMU_INVAL_F_CONFIG),
+
+		.domain		= cpu_to_le32(vdomain->id),
+	};
+
+	if (viommu_send_req_sync(vdomain->viommu, &req, sizeof(req)))
+		pr_debug("could not send invalidate request\n");
+}
+
+static struct iommu_pasid_sync_ops viommu_pasid_sync_ops = {
+	.cfg_flush		= viommu_flush_pasid,
+	.cfg_flush_all		= viommu_flush_pasid_all,
+	.tlb_flush		= viommu_flush_pasid_tlb_all,
+};
+
+static void viommu_flush_tlb_all(void *cookie)
+{
+	struct viommu_domain *vdomain = cookie;
+
+	if (!vdomain->pgtable_entry)
+		return;
+	__viommu_flush_pasid_tlb_all(vdomain, 0, vdomain->pgtable_entry->tag);
+}
+
+static void viommu_flush_tlb_add(unsigned long iova, size_t size,
+				 size_t granule, bool leaf, void *cookie)
+{
+	struct viommu_domain *vdomain = cookie;
+	struct virtio_iommu_req_invalidate req = {
+		.head.type	= VIRTIO_IOMMU_T_INVALIDATE,
+		.scope		= cpu_to_le32(VIRTIO_IOMMU_INVAL_S_VA),
+		.flags		= cpu_to_le32(leaf ? VIRTIO_IOMMU_INVAL_F_LEAF : 0),
+
+		.domain		= cpu_to_le32(vdomain->id),
+		.pasid		= 0,
+		.id		= cpu_to_le64(vdomain->pgtable_entry->tag),
+		.virt_start	= cpu_to_le64(iova),
+		.nr_pages	= cpu_to_le64(size / granule),
+		.granule	= ilog2(granule),
+	};
+
+	if (viommu_add_req(vdomain->viommu, &req, sizeof(req)))
+		pr_debug("could not add invalidate request\n");
+}
+
+static void viommu_flush_tlb_sync(void *cookie)
+{
+	struct viommu_domain *vdomain = cookie;
+
+	viommu_sync_req(vdomain->viommu);
+}
+
+static struct iommu_gather_ops viommu_gather_ops = {
+	.tlb_flush_all		= viommu_flush_tlb_all,
+	.tlb_add_flush		= viommu_flush_tlb_add,
+	.tlb_sync		= viommu_flush_tlb_sync,
+};
+
 /* IOMMU API */
 
 static struct iommu_domain *viommu_domain_alloc(unsigned type)
@@ -1273,6 +1383,7 @@ static int viommu_probe(struct virtio_device *vdev)
 			     struct virtio_iommu_config, probe_size,
 			     &viommu->probe_size);
 
+	viommu->has_table = virtio_has_feature(vdev, VIRTIO_IOMMU_F_ATTACH_TABLE);
 	viommu->geometry = (struct iommu_domain_geometry) {
 		.aperture_start	= input_start,
 		.aperture_end	= input_end,
@@ -1373,6 +1484,7 @@ static unsigned int features[] = {
 	VIRTIO_IOMMU_F_DOMAIN_BITS,
 	VIRTIO_IOMMU_F_INPUT_RANGE,
 	VIRTIO_IOMMU_F_PROBE,
+	VIRTIO_IOMMU_F_ATTACH_TABLE,
 };
 
 static struct virtio_device_id id_table[] = {
