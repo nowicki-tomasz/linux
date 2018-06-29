@@ -13,6 +13,9 @@
 
 #include <linux/types.h>
 
+#define PASID_TABLE_MODEL_X86	0
+#define PASID_TABLE_MODEL_ARM	1
+
 /**
  * PASID table data used to bind guest PASID table to the host IOMMU. This will
  * enable guest managed first level page tables.
@@ -21,13 +24,22 @@
  * @base_ptr:	PASID table pointer
  * @pasid_bits:	number of bits supported in the guest PASID table, must be less
  *		or equal than the host supported PASID size.
+ * @model: table model
  */
 struct pasid_table_config {
 	__u32 version;
 #define PASID_TABLE_CFG_VERSION_1 1
+#define PASID_TABLE_CFG_VERSION_2 2
 	__u32 bytes;
 	__u64 base_ptr;
+	__u8 model;
 	__u8 pasid_bits;
+	union {
+		struct {
+			__u8 s1dss;
+			__u8 s1fmt;
+		} arm_smmu_v3;
+	};
 };
 
 /**
@@ -91,6 +103,7 @@ enum iommu_inv_type {
 struct tlb_invalidate_hdr {
 	__u32 version;
 #define TLB_INV_HDR_VERSION_1 1
+#define TLB_INV_HDR_VERSION_2 2
 	enum iommu_inv_type type;
 };
 
@@ -108,6 +121,7 @@ struct tlb_invalidate_hdr {
  * @addr:		page address to be invalidated
  * @flags		IOMMU_INVALIDATE_ADDR_LEAF: leaf paging entries
  *			IOMMU_INVALIDATE_GLOBAL_PAGE: global pages
+ * @tag:		architectural tag that identifies TLB entries
  *
  */
 struct tlb_invalidate_info {
@@ -120,5 +134,6 @@ struct tlb_invalidate_info {
 	__u64		nr_pages;
 	__u32		pasid;
 	__u64		addr;
+	__u64		tag;
 };
 #endif /* _UAPI_IOMMU_H */
