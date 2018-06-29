@@ -439,6 +439,7 @@ struct arm_smmu_cmdq_ent {
 			};
 		} cfgi;
 
+		#define CMDQ_OP_TLBI_NH_ALL	0x10
 		#define CMDQ_OP_TLBI_NH_ASID	0x11
 		#define CMDQ_OP_TLBI_NH_VA	0x12
 		#define CMDQ_OP_TLBI_EL2_ALL	0x20
@@ -873,6 +874,8 @@ static int arm_smmu_cmdq_build_cmd(u64 *cmd, struct arm_smmu_cmdq_ent *ent)
 		cmd[1] |= FIELD_PREP(CMDQ_CFGI_1_RANGE, 31);
 		break;
 	case CMDQ_OP_TLBI_NH_VA:
+		cmd[0] |= FIELD_PREP(CMDQ_TLBI_0_VMID, ent->tlbi.vmid);
+		/* Fallthrough */
 	case CMDQ_OP_TLBI_EL2_VA:
 		cmd[0] |= FIELD_PREP(CMDQ_TLBI_0_ASID, ent->tlbi.asid);
 		cmd[1] |= FIELD_PREP(CMDQ_TLBI_1_LEAF, ent->tlbi.leaf);
@@ -887,6 +890,7 @@ static int arm_smmu_cmdq_build_cmd(u64 *cmd, struct arm_smmu_cmdq_ent *ent)
 		cmd[0] |= FIELD_PREP(CMDQ_TLBI_0_ASID, ent->tlbi.asid);
 		/* Fallthrough */
 	case CMDQ_OP_TLBI_S12_VMALL:
+	case CMDQ_OP_TLBI_NH_ALL:
 		cmd[0] |= FIELD_PREP(CMDQ_TLBI_0_VMID, ent->tlbi.vmid);
 		break;
 	case CMDQ_OP_TLBI_EL2_ASID:
@@ -1695,6 +1699,8 @@ static bool arm_smmu_master_has_ats(struct arm_smmu_master_data *master)
 	return dev_is_pci(master->dev) && to_pci_dev(master->dev)->ats_enabled;
 }
 
+#define ARM_SMMU_ALL_SSID	(-1)
+
 static void
 arm_smmu_atc_inv_to_cmd(int ssid, unsigned long iova, size_t size,
 			struct arm_smmu_cmdq_ent *cmd)
@@ -1707,8 +1713,9 @@ arm_smmu_atc_inv_to_cmd(int ssid, unsigned long iova, size_t size,
 
 	*cmd = (struct arm_smmu_cmdq_ent) {
 		.opcode			= CMDQ_OP_ATC_INV,
-		.substream_valid	= !!ssid,
+		.substream_valid	= ssid != 0, /* FIXME: handle S1DSS!=0b10 */
 		.atc.ssid		= ssid,
+		.atc.global		= ssid == ARM_SMMU_ALL_SSID,
 	};
 
 	if (!size) {
@@ -2528,6 +2535,97 @@ static void arm_smmu_mm_invalidate(struct iommu_domain *domain,
 	 */
 }
 
+struct arm_smmu_tlb_invalidate_hints { /* TODO: export to userspace via vfio.h */
+	/*
+	 * Page size used for invalidation range. For instance, when
+	 * invalidating a single 1G block, the TBU only has a single entry and
+	 * there is no need to iterate over the whole range page per page.
+	 * In this case, granule would be log2(1GiB) = 30
+	 */
+	u8	granule;
+};
+
+int arm_smmu_handle_invalidate(struct iommu_domain *domain, struct device *dev,
+			       struct tlb_invalidate_info *inv)
+{
+	int i = 0;
+	u64 iova = inv->addr;
+	int pasid = inv->pasid;
+	size_t pgsize = 1 << (inv->size + 12);
+	size_t size = pgsize * inv->nr_pages;
+	bool leaf = inv->flags & IOMMU_INVALIDATE_ADDR_LEAF;
+	struct arm_smmu_domain *smmu_domain = to_smmu_domain(domain);
+	struct arm_smmu_cmdq_ent cmd = {
+		.tlbi.vmid = smmu_domain->s2_cfg.vmid,
+	};
+
+	/*
+	 * Invalidate cached configuration before the TLBs. Types are
+	 * cumulative: When invalidating by PASID type, also invalidate the TLBs
+	 * and device TLBs.
+	 */
+	switch (inv->hdr.type) {
+	case IOMMU_INV_TYPE_PASID:
+		switch (inv->granularity) {
+		case IOMMU_INV_GRANU_PASID_SEL:
+			arm_smmu_sync_cd(smmu_domain, pasid, leaf);
+			break;
+		case IOMMU_INV_GRANU_DOMAIN_ALL_PASID:
+			arm_smmu_sync_cd_all(smmu_domain);
+			break;
+		default:
+			return -EINVAL;
+		}
+
+		/* Fallthrough */
+	case IOMMU_INV_TYPE_TLB:
+		switch (inv->granularity) {
+		case IOMMU_INV_GRANU_DOMAIN_ALL_PASID:
+			cmd.opcode = CMDQ_OP_TLBI_NH_ALL;
+			arm_smmu_cmdq_issue_cmd(smmu_domain->smmu, &cmd);
+			break;
+		case IOMMU_INV_GRANU_PASID_SEL:
+			cmd.opcode = CMDQ_OP_TLBI_NH_ASID;
+			cmd.tlbi.asid = inv->tag;
+			arm_smmu_cmdq_issue_cmd(smmu_domain->smmu, &cmd);
+			break;
+		case IOMMU_INV_GRANU_PAGE_PASID:
+			cmd.opcode = CMDQ_OP_TLBI_NH_VA,
+			cmd.tlbi.leaf = leaf;
+			cmd.tlbi.asid = inv->tag;
+			for (i = 0; i < inv->nr_pages; i++) {
+				cmd.tlbi.addr = iova + i * pgsize;
+				arm_smmu_cmdq_issue_cmd(smmu_domain->smmu, &cmd);
+			}
+			break;
+		default:
+			return -EINVAL;
+		}
+		arm_smmu_tlb_sync(smmu_domain);
+
+		/* Fallthrough */
+	case IOMMU_INV_TYPE_DTLB:
+		switch (inv->granularity) {
+		case IOMMU_INV_GRANU_DOMAIN_ALL_PASID:
+			pasid = ARM_SMMU_ALL_SSID;
+			break;
+		case IOMMU_INV_GRANU_PASID_SEL:
+			iova = 0;
+			size = 0;
+			break;
+		default:
+			break;
+		}
+		/* TODO: global flag? */
+		arm_smmu_atc_inv_domain(smmu_domain, pasid, iova, size);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 static struct platform_driver arm_smmu_driver;
 
 static int arm_smmu_match_node(struct device *dev, void *data)
@@ -2950,6 +3048,7 @@ static struct iommu_ops arm_smmu_ops = {
 	.mm_attach		= arm_smmu_mm_attach,
 	.mm_detach		= arm_smmu_mm_detach,
 	.mm_invalidate		= arm_smmu_mm_invalidate,
+	.sva_invalidate		= arm_smmu_handle_invalidate,
 	.page_response		= arm_smmu_page_response,
 	.map			= arm_smmu_map,
 	.unmap			= arm_smmu_unmap,
