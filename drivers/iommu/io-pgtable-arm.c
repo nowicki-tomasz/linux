@@ -107,6 +107,14 @@
 /* Software bit for solving coherency races */
 #define ARM_LPAE_PTE_SW_SYNC		(((arm_lpae_iopte)1) << 55)
 
+#define ARM_LPAE_PTE_HWU059		(((arm_lpae_iopte)1) << 59)
+
+#define FLOAT_MASK			(ARM_LPAE_PTE_VALID | ARM_LPAE_PTE_AF |\
+					 ARM_LPAE_PTE_HWU059)
+#define FLOAT_CACHED			(ARM_LPAE_PTE_VALID | ARM_LPAE_PTE_AF)
+
+#define pte_is_cached(pte)		(((pte) & FLOAT_MASK) == FLOAT_CACHED)
+
 /* Stage-1 PTE */
 #define ARM_LPAE_PTE_AP_UNPRIV		(((arm_lpae_iopte)1) << 6)
 #define ARM_LPAE_PTE_AP_RDONLY		(((arm_lpae_iopte)2) << 6)
@@ -235,13 +243,16 @@ static void __arm_lpae_sync_pte(arm_lpae_iopte *ptep,
 				   sizeof(*ptep), DMA_TO_DEVICE);
 }
 
-static void __arm_lpae_set_pte(arm_lpae_iopte *ptep, arm_lpae_iopte pte,
-			       struct io_pgtable_cfg *cfg)
+static arm_lpae_iopte __arm_lpae_set_pte(arm_lpae_iopte *ptep,
+					 arm_lpae_iopte pte,
+					 struct io_pgtable_cfg *cfg)
 {
-	*ptep = pte;
+	u64 ret = xchg(ptep, pte);
 
 	if (!(cfg->quirks & IO_PGTABLE_QUIRK_NO_DMA))
 		__arm_lpae_sync_pte(ptep, cfg);
+
+	return ret;
 }
 
 static size_t __arm_lpae_unmap(struct arm_lpae_io_pgtable *data,
@@ -256,13 +267,15 @@ static void __arm_lpae_init_pte(struct arm_lpae_io_pgtable *data,
 
 	if (data->iop.cfg.quirks & IO_PGTABLE_QUIRK_ARM_NS)
 		pte |= ARM_LPAE_PTE_NS;
+	if (!(data->iop.cfg.quirks & IO_PGTABLE_QUIRK_FLOAT_BIT))
+		pte |= ARM_LPAE_PTE_AF;
 
 	if (lvl == ARM_LPAE_MAX_LEVELS - 1)
 		pte |= ARM_LPAE_PTE_TYPE_PAGE;
 	else
 		pte |= ARM_LPAE_PTE_TYPE_BLOCK;
 
-	pte |= ARM_LPAE_PTE_AF | ARM_LPAE_PTE_SH_IS;
+	pte |= ARM_LPAE_PTE_SH_IS;
 	pte |= paddr_to_iopte(paddr, data);
 
 	__arm_lpae_set_pte(ptep, pte, &data->iop.cfg);
@@ -542,6 +555,7 @@ static size_t __arm_lpae_unmap(struct arm_lpae_io_pgtable *data,
 {
 	arm_lpae_iopte pte;
 	struct io_pgtable *iop = &data->iop;
+	struct io_pgtable_cfg *cfg = &data->iop.cfg;
 
 	/* Something went horribly wrong and we ran out of page table */
 	if (WARN_ON(lvl == ARM_LPAE_MAX_LEVELS))
@@ -554,7 +568,7 @@ static size_t __arm_lpae_unmap(struct arm_lpae_io_pgtable *data,
 
 	/* If the size matches this level, we're in the right place */
 	if (size == ARM_LPAE_BLOCK_SIZE(lvl, data)) {
-		__arm_lpae_set_pte(ptep, 0, &iop->cfg);
+		pte = __arm_lpae_set_pte(ptep, 0, &iop->cfg);
 
 		if (!iopte_leaf(pte, lvl)) {
 			/* Also flush any partial walks */
@@ -563,7 +577,8 @@ static size_t __arm_lpae_unmap(struct arm_lpae_io_pgtable *data,
 			io_pgtable_tlb_sync(iop);
 			ptep = iopte_deref(pte, data);
 			__arm_lpae_free_pgtable(data, lvl + 1, ptep);
-		} else {
+		} else if (!(cfg->quirks & IO_PGTABLE_QUIRK_FLOAT_BIT) ||
+			   (pte_is_cached(pte))) {
 			io_pgtable_tlb_add_flush(iop, iova, size, size, true);
 		}
 
@@ -725,7 +740,9 @@ arm_64_lpae_alloc_pgtable_s1(struct io_pgtable_cfg *cfg, void *cookie)
 	u64 reg;
 	struct arm_lpae_io_pgtable *data;
 
-	if (cfg->quirks & ~(IO_PGTABLE_QUIRK_ARM_NS | IO_PGTABLE_QUIRK_NO_DMA))
+	if (cfg->quirks & ~(IO_PGTABLE_QUIRK_ARM_NS |
+			    IO_PGTABLE_QUIRK_NO_DMA |
+			    IO_PGTABLE_QUIRK_FLOAT_BIT))
 		return NULL;
 
 	data = arm_lpae_alloc_pgtable(cfg);

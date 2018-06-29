@@ -901,7 +901,17 @@ static void viommu_domain_free(struct iommu_domain *domain)
 static int viommu_prepare_arm_pgt(void *properties,
 				  struct io_pgtable_cfg *cfg)
 {
-	/* TODO: quirks */
+	struct virtio_iommu_probe_pgtf_arm *pgtf = properties;
+	u64 float_mask = (VIRTIO_IOMMU_PGTF_ARM_LPAE_F_HPD |
+			  VIRTIO_IOMMU_PGTF_ARM_LPAE_F_HW_ACCESS |
+			  VIRTIO_IOMMU_PGTF_ARM_LPAE_F_HW_FLOAT);
+	u64 flags = le64_to_cpu(pgtf->flags);
+
+	if ((flags & float_mask) == float_mask) {
+		pr_info("FLOAT BIT");
+		cfg->quirks |= IO_PGTABLE_QUIRK_FLOAT_BIT;
+	}
+
 	return 0;
 }
 
@@ -920,7 +930,8 @@ static int viommu_config_arm_pgt(struct viommu_endpoint *vdev,
 	struct virtio_iommu_probe_pgtf_arm *pgtf = (void *)vdev->pgtf;
 	u64 tcr = (cfg->arm_lpae_s1_cfg.tcr & ARM_LPAE_TCR_MASK) |
 		  VIRTIO_IOMMU_PGTF_ARM_EPD1 | VIRTIO_IOMMU_PGTF_ARM_HPD0 |
-		  VIRTIO_IOMMU_PGTF_ARM_HPD1;
+		  VIRTIO_IOMMU_PGTF_ARM_HA | VIRTIO_IOMMU_PGTF_ARM_HPD1 |
+		  VIRTIO_IOMMU_PGTF_ARM_HWU059;
 	int id;
 
 	if (pgtf->asid_bits != 8 && pgtf->asid_bits != 16)
