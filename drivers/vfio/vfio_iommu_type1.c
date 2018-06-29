@@ -2044,6 +2044,52 @@ static long vfio_iommu_type1_unbind_process(struct vfio_iommu *iommu,
 	return ret;
 }
 
+static long vfio_iommu_type1_bind_pasid_table(struct vfio_iommu *iommu,
+					      void __user *arg,
+					      struct vfio_iommu_type1_bind *bind)
+{
+	struct pasid_table_config config;
+
+	struct vfio_domain *domain;
+	unsigned long minsz;
+	int ret;
+
+	minsz = sizeof(*bind) + sizeof(config);
+	if (WARN_ON(bind->argsz < minsz))
+		return -EINVAL;
+
+	arg += sizeof(*bind);
+	ret = copy_from_user(&config, arg, sizeof(config));
+	if (ret)
+		return -EFAULT;
+
+	mutex_lock(&iommu->lock);
+	list_for_each_entry(domain, &iommu->domain_list, next) {
+		/* FIXME: dev? */
+		ret = iommu_bind_pasid_table(domain->domain, NULL, &config);
+		if (ret)
+			break;
+	}
+	mutex_unlock(&iommu->lock);
+
+	return ret;
+}
+
+static long vfio_iommu_type1_unbind_pasid_table(struct vfio_iommu *iommu,
+						void __user *arg,
+						struct vfio_iommu_type1_bind *bind)
+{
+	struct vfio_domain *domain;
+
+	mutex_lock(&iommu->lock);
+	list_for_each_entry(domain, &iommu->domain_list, next)
+		/* FIXME: dev? */
+		iommu_unbind_pasid_table(domain->domain, NULL);
+	mutex_unlock(&iommu->lock);
+
+	return 0;
+}
+
 static long vfio_iommu_type1_tlb_invalidate(struct vfio_iommu *iommu,
 					    struct tlb_invalidate_info *tlbi)
 {
@@ -2166,6 +2212,10 @@ static long vfio_iommu_type1_ioctl(void *iommu_data,
 		case VFIO_IOMMU_BIND_PROCESS:
 			return vfio_iommu_type1_bind_process(iommu, (void *)arg,
 							     &bind);
+		case VFIO_IOMMU_BIND_PASID_TABLE:
+			return vfio_iommu_type1_bind_pasid_table(iommu,
+								 (void *)arg,
+								 &bind);
 		default:
 			return -EINVAL;
 		}
@@ -2185,6 +2235,10 @@ static long vfio_iommu_type1_ioctl(void *iommu_data,
 		case VFIO_IOMMU_BIND_PROCESS:
 			return vfio_iommu_type1_unbind_process(iommu, (void *)arg,
 							       &bind);
+		case VFIO_IOMMU_BIND_PASID_TABLE:
+			return vfio_iommu_type1_unbind_pasid_table(iommu,
+								   (void *)arg,
+								   &bind);
 		default:
 			return -EINVAL;
 		}

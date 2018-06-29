@@ -704,13 +704,15 @@ struct vfio_iommu_type1_bind_process {
 };
 
 /*
- * Only mode supported at the moment is VFIO_IOMMU_BIND_PROCESS, which takes
- * vfio_iommu_type1_bind_process in data.
+ * Supported modes are
+ * VFIO_IOMMU_BIND_PROCESS, which takes vfio_iommu_type1_bind_process in data,
+ * VFIO_IOMMU_BIND_PASID_TABLE, which takes pasid_table_config in data,
  */
 struct vfio_iommu_type1_bind {
 	__u32	argsz;
 	__u32	flags;
 #define VFIO_IOMMU_BIND_PROCESS		(1 << 0)
+#define VFIO_IOMMU_BIND_PASID_TABLE	(1 << 1)
 	__u8	data[];
 };
 
