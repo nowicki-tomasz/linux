@@ -39,6 +39,9 @@
 
 #define VIOMMU_REQUEST_TIMEOUT		10000 /* 10s */
 
+/* Some architectures need an Address Space ID for each page table */
+static DEFINE_IDA(asid_ida);
+
 struct viommu_dev {
 	struct iommu_device		iommu;
 	struct device			*dev;
@@ -890,6 +893,76 @@ static int viommu_prepare_arm_pgt(void *properties,
 	return 0;
 }
 
+#define ARM_LPAE_TCR_MASK	\
+	(VIRTIO_IOMMU_PGTF_ARM_TG0_MASK << VIRTIO_IOMMU_PGTF_ARM_TG0_SHIFT |\
+	 VIRTIO_IOMMU_PGTF_ARM_IRGN0_MASK << VIRTIO_IOMMU_PGTF_ARM_IRGN0_SHIFT |\
+	 VIRTIO_IOMMU_PGTF_ARM_ORGN0_MASK << VIRTIO_IOMMU_PGTF_ARM_ORGN0_SHIFT |\
+	 VIRTIO_IOMMU_PGTF_ARM_SH0_MASK << VIRTIO_IOMMU_PGTF_ARM_SH0_SHIFT |\
+	 VIRTIO_IOMMU_PGTF_ARM_TG0_MASK << VIRTIO_IOMMU_PGTF_ARM_TG0_SHIFT)
+
+static int viommu_config_arm_pgt(struct viommu_endpoint *vdev,
+				 struct io_pgtable_cfg *cfg,
+				 struct virtio_iommu_req_attach_pgt_arm *req,
+				 u64 *asid)
+{
+	struct virtio_iommu_probe_pgtf_arm *pgtf = (void *)vdev->pgtf;
+	u64 tcr = (cfg->arm_lpae_s1_cfg.tcr & ARM_LPAE_TCR_MASK) |
+		  VIRTIO_IOMMU_PGTF_ARM_EPD1 | VIRTIO_IOMMU_PGTF_ARM_HPD0 |
+		  VIRTIO_IOMMU_PGTF_ARM_HPD1;
+	int id;
+
+	if (pgtf->asid_bits != 8 && pgtf->asid_bits != 16)
+		return -EINVAL;
+
+	id = ida_simple_get(&asid_ida, 1, 1 << pgtf->asid_bits, GFP_KERNEL);
+	if (id < 0)
+		return -ENOMEM;
+
+	req->format	= cpu_to_le16(VIRTIO_IOMMU_PGTF_ARM_LPAE);
+	req->ttbr0	= cpu_to_le64(cfg->arm_lpae_s1_cfg.ttbr[0]);
+	req->tcr	= cpu_to_le64(tcr);
+	req->mair	= cpu_to_le64(cfg->arm_lpae_s1_cfg.mair[0]);
+	req->asid	= cpu_to_le16(id);
+
+	*asid = id;
+	return 0;
+}
+
+static int viommu_attach_pgtable(struct viommu_endpoint *vdev,
+				 struct viommu_domain *vdomain,
+				 enum io_pgtable_fmt fmt,
+				 struct io_pgtable_cfg *cfg,
+				 u64 *asid)
+{
+	int ret;
+	int i, eid;
+
+	struct virtio_iommu_req_attach_table req = {
+		.head.type	= VIRTIO_IOMMU_T_ATTACH_TABLE,
+		.domain		= cpu_to_le32(vdomain->id),
+	};
+
+	switch (fmt) {
+	case ARM_64_LPAE_S1:
+		ret = viommu_config_arm_pgt(vdev, cfg, (void *)&req, asid);
+		if (ret)
+			return ret;
+		break;
+	default:
+		WARN_ON(1);
+		return -EINVAL;
+	}
+
+	vdev_for_each_id(i, eid, vdev) {
+		req.endpoint = cpu_to_le32(eid);
+		ret = viommu_send_req_sync(vdomain->viommu, &req, sizeof(req));
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
 static int viommu_setup_pgtable(struct viommu_endpoint *vdev,
 				struct viommu_domain *vdomain)
 {
@@ -929,49 +1002,76 @@ static int viommu_setup_pgtable(struct viommu_endpoint *vdev,
 	if (ret)
 		return ret;
 
-	if (!vdomain->pgtable_ops) {
-		ops = alloc_io_pgtable_ops(fmt, &cfg, vdomain);
-		if (!ops)
-			return -ENOMEM;
+	if (vdomain->pgtable_ops)
+		/* TODO Sanity-check cfg */
+		return -ENOSYS;
 
+	ops = alloc_io_pgtable_ops(fmt, &cfg, vdomain);
+	if (!ops) {
+		pr_err("alloc failed\n");
+		return -ENOMEM;
+	}
+
+	if (!pasid_ops) {
+		/* No PASID support, send attach_table, create a dummy entry */
+		entry = kzalloc(sizeof(*entry), GFP_KERNEL);
+		if (!entry)
+			goto err_free_pgtable;
+
+		ret = viommu_attach_pgtable(vdev, vdomain, fmt, &cfg,
+					    &entry->tag);
+		if (ret) {
+			kfree(entry);
+			goto err_free_pgtable;
+		}
+	} else {
 		entry = pasid_ops->alloc_priv_entry(pasid_ops, fmt, &cfg);
 		if (IS_ERR(entry)) {
-			free_io_pgtable_ops(ops);
-			return PTR_ERR(entry);
+			ret = PTR_ERR(entry);
+			goto err_free_pgtable;
 		}
 
 		ret = pasid_ops->set_entry(pasid_ops, 0, entry);
 		if (ret) {
 			iommu_free_pasid_entry(entry);
-			free_io_pgtable_ops(ops);
-			return ret;
+			goto err_free_pgtable;
 		}
-
-		vdomain->pgtable_entry = entry;
-		vdomain->pgtable_ops = ops;
-		vdomain->pgtable_cfg = cfg;
-	} else {
-		/* TODO Sanity-check cfg */
 	}
+
+	vdomain->pgtable_entry = entry;
+	vdomain->pgtable_ops = ops;
+	vdomain->pgtable_cfg = cfg;
 
 	dev_dbg(vdev->dev, "using page table format 0x%x\n", fmt);
 
 	return 0;
+
+err_free_pgtable:
+	free_io_pgtable_ops(ops);
+	return ret;
 }
 
 static int viommu_teardown_pgtable(struct viommu_domain *vdomain)
 {
 	struct iommu_pasid_table_ops *pasid_ops = vdomain->pasid_ops;
 
-	if (!vdomain->pgtable_ops || !pasid_ops)
+	if (!vdomain->pgtable_ops)
 		return 0;
 
-	pasid_ops->clear_entry(pasid_ops, 0, vdomain->pgtable_entry);
-	iommu_free_pasid_entry(vdomain->pgtable_entry);
-	vdomain->pgtable_entry = NULL;
+	if (pasid_ops) {
+		pasid_ops->clear_entry(pasid_ops, 0, vdomain->pgtable_entry);
+		iommu_free_pasid_entry(vdomain->pgtable_entry);
+	} else {
+		struct iommu_pasid_entry *entry = vdomain->pgtable_entry;
+
+		if (entry->tag)
+			ida_simple_remove(&asid_ida, entry->tag);
+		kfree(entry);
+	}
 
 	free_io_pgtable_ops(vdomain->pgtable_ops);
 	vdomain->pgtable_ops = NULL;
+	vdomain->pgtable_entry = NULL;
 
 	return 0;
 }
@@ -1203,8 +1303,15 @@ static int viommu_attach_dev(struct iommu_domain *domain, struct device *dev)
 	}
 
 	ret = viommu_bind_pasid_table(vdev, vdomain);
-	if (ret)
-		dev_err(vdev->dev, "could not install PASID tables\n");
+	if (ret) {
+		/*
+		 * No PASID support, too bad. Perhaps we can bind a single set
+		 * of page tables?
+		 */
+		ret = viommu_setup_pgtable(vdev, vdomain);
+		if (ret)
+			dev_err(vdev->dev, "could not install tables\n");
+	}
 
 	/* For a PAGING domain, we need either pgtable_ops or the mapping tree. */
 	if (!vdomain->pgtable_ops) {
