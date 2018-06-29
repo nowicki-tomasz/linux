@@ -210,6 +210,7 @@ struct virtio_iommu_probe_property {
 
 #define VIRTIO_IOMMU_RESV_MEM_T_RESERVED	0
 #define VIRTIO_IOMMU_RESV_MEM_T_MSI		1
+#define VIRTIO_IOMMU_RESV_MEM_T_IDENTITY	2
 
 struct virtio_iommu_probe_resv_mem {
 	struct virtio_iommu_probe_property	head;
@@ -217,6 +218,8 @@ struct virtio_iommu_probe_resv_mem {
 	__u8					reserved[3];
 	__le64					start;
 	__le64					end;
+	__le32					flags;
+	__le32					padding;
 };
 
 struct virtio_iommu_probe_page_size_mask {

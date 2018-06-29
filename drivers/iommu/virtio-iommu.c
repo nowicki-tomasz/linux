@@ -100,6 +100,7 @@ struct viommu_endpoint {
 	struct viommu_dev		*viommu;
 	struct viommu_domain		*vdomain;
 	struct list_head		resv_regions;
+	struct list_head		identity_regions;
 	struct device_link		*link;
 
 	/* properties of the physical IOMMU */
@@ -463,6 +464,7 @@ static int viommu_add_resv_mem(struct viommu_endpoint *vdev,
 {
 	struct iommu_resv_region *region = NULL;
 	unsigned long prot = IOMMU_WRITE | IOMMU_NOEXEC | IOMMU_MMIO;
+	unsigned long flags;
 
 	u64 start = le64_to_cpu(mem->start);
 	u64 end = le64_to_cpu(mem->end);
@@ -484,9 +486,19 @@ static int viommu_add_resv_mem(struct viommu_endpoint *vdev,
 		region = iommu_alloc_resv_region(start, size, prot,
 						 IOMMU_RESV_MSI);
 		break;
+	case VIRTIO_IOMMU_RESV_MEM_T_IDENTITY:
+		flags = le32_to_cpu(mem->flags);
+		prot = (flags & VIRTIO_IOMMU_MAP_F_READ ? IOMMU_READ : 0) |
+		       (flags & VIRTIO_IOMMU_MAP_F_WRITE ? IOMMU_WRITE : 0) |
+		       (flags & VIRTIO_IOMMU_MAP_F_MMIO ? IOMMU_MMIO : 0) |
+		       (flags & VIRTIO_IOMMU_MAP_F_EXEC ? 0 : IOMMU_NOEXEC);
+		region = iommu_alloc_resv_region(start, size, prot,
+						 IOMMU_RESV_DIRECT);
+		break;
 	}
 
-	list_add(&vdev->resv_regions, &region->list);
+	list_add(&region->list, region->type == IOMMU_RESV_DIRECT ?
+		 &vdev->identity_regions : &vdev->resv_regions);
 	return 0;
 }
 
@@ -1318,6 +1330,20 @@ static int viommu_attach_dev(struct iommu_domain *domain, struct device *dev)
 		ret = viommu_simple_attach(vdomain, vdev);
 		if (ret)
 			return ret;
+	} else {
+		struct iommu_resv_region *entry;
+		list_for_each_entry(entry, &vdev->identity_regions, list) {
+			/*
+			 * Unfortunately we can't use the default IOMMU direct
+			 * stuff, because it's called before attach when there
+			 * are no page tables. FIXME: could this be fixed in the
+			 * core? It will be broken for other drivers as well.
+			 */
+			ret = iommu_map(domain, entry->start, entry->start,
+					entry->length, entry->prot);
+			if (ret)
+				return ret;
+		}
 	}
 
 	vdomain->nr_endpoints++;
@@ -1513,6 +1539,7 @@ static int viommu_add_device(struct device *dev)
 	vdev->dev = dev;
 	vdev->viommu = viommu;
 	INIT_LIST_HEAD(&vdev->resv_regions);
+	INIT_LIST_HEAD(&vdev->identity_regions);
 	fwspec->iommu_priv = vdev;
 
 	vdev->link = device_link_add(dev, viommu->dev, 0);
@@ -1549,6 +1576,7 @@ err_unlink_dev:
 
 err_free_dev:
 	viommu_put_resv_regions(dev, &vdev->resv_regions);
+	viommu_put_resv_regions(dev, &vdev->identity_regions);
 	kfree(vdev);
 
 	return ret;
@@ -1568,6 +1596,7 @@ static void viommu_remove_device(struct device *dev)
 	iommu_group_remove_device(dev);
 	iommu_device_unlink(&vdev->viommu->iommu, dev);
 	viommu_put_resv_regions(dev, &vdev->resv_regions);
+	viommu_put_resv_regions(dev, &vdev->identity_regions);
 	device_link_del(vdev->link);
 	kfree(vdev->pstf);
 	kfree(vdev->pgtf);
