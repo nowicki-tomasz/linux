@@ -70,6 +70,8 @@ struct vhost_umem_node {
 	__u64 __subtree_last;
 	__u64 __subtree_last_iommu;
 	__u64 iommu_owner;
+	/* Hint: when non zero, do the PTW again to release the entry */
+	__u64 release;
 };
 
 struct vhost_umem {
@@ -129,6 +131,8 @@ struct vhost_virtqueue {
 	u64 log_addr;
 
 	struct iovec iov[UIO_MAXIOV];
+	struct vhost_umem_node *tlb_iov[UIO_MAXIOV];
+	struct vhost_umem_node *tlb_indirect[UIO_MAXIOV];
 	struct iovec iotlb_iov[64];
 	struct iovec *indirect;
 	struct vring_used_elem *heads;
@@ -187,12 +191,14 @@ long vhost_dev_ioctl(struct vhost_dev *, unsigned int ioctl, void __user *argp);
 long vhost_vring_ioctl(struct vhost_dev *d, unsigned int ioctl, void __user *argp);
 bool vhost_vq_access_ok(struct vhost_virtqueue *vq);
 bool vhost_log_access_ok(struct vhost_dev *);
+void *vhost_guest_to_host(struct vhost_dev *dev, uint64_t start);
 
 #ifdef CONFIG_VHOST_IOMMU
 struct vhost_umem_node *vhost_iommu_translate(struct vhost_iommu_as *as,
 					     u64 addr, u64 end, int access);
 int vhost_iommu_attach_dev(struct vhost_dev *dev,
 			   struct vhost_iommu_bind *bind);
+void iommu_release(struct vhost_iommu_as *as, struct vhost_umem_node *node);
 #else
 static inline struct vhost_umem_node *vhost_iommu_translate(
 						struct vhost_iommu_as *as,
@@ -205,9 +211,13 @@ static inline int vhost_iommu_attach_dev(struct vhost_dev *dev,
 {
 	return -ENODEV;
 }
+static inline void iommu_release(struct vhost_iommu_as *as,
+				 struct vhost_umem_node *node) {}
 #endif
 void vhost_iommu_iotlb_inv(struct vhost_dev *dev,
 			   struct vhost_umem_node *node);
+void vhost_queue__put_iov(struct vhost_virtqueue *vq,
+			struct vhost_umem_node **tlb, int count);
 
 int vhost_get_vq_desc(struct vhost_virtqueue *,
 		      struct iovec iov[], unsigned int iov_count,

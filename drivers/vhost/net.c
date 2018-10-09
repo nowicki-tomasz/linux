@@ -587,6 +587,9 @@ static void handle_tx(struct vhost_net *net)
 		if (err != len)
 			pr_debug("Truncated TX packet: "
 				 " len %d != %zd\n", err, len);
+
+		vhost_queue__put_iov(vq, vq->tlb_iov, out);
+
 		if (!zcopy_used)
 			vhost_add_used_and_signal(&net->dev, vq, head, 0);
 		else
@@ -885,6 +888,7 @@ static void handle_rx(struct vhost_net *net)
 			goto out;
 		}
 		nvq->done_idx += headcount;
+		vhost_queue__put_iov(vq, vq->tlb_iov, in);
 		if (nvq->done_idx > VHOST_RX_BATCH)
 			vhost_rx_signal_used(nvq);
 		if (unlikely(vq_log))

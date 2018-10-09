@@ -224,6 +224,7 @@ struct vhost_iommu_xlate {
 
 struct vhost_iommu_config {
     struct virtio_iommu_config  config;
+    uint32_t                    pgtf;
 };
 
 #define VHOST_IOMMU_ID      		_IOW(VHOST_VIRTIO, 0x80, __u32)

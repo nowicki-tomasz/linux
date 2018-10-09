@@ -1187,6 +1187,22 @@ static void vhost_vq_meta_update(struct vhost_virtqueue *vq,
 		vq->meta_iotlb[type] = node;
 }
 
+void *vhost_guest_to_host(struct vhost_dev *dev, uint64_t start)
+{
+	struct vhost_umem_node *node;
+
+	if (!dev->umem || !&dev->umem->umem_tree)
+		pr_err("%s RAM memory map not initialized !!!\n", __func__);
+
+	/* Lookup userspace addr */
+	node = vhost_umem_interval_tree_iter_first(&dev->umem->umem_tree,
+						   start, start + 1);
+	if (node == NULL)
+		return NULL;
+
+	return (void *)node->userspace_addr + (start - node->start);
+}
+
 static int vhost_iommu_fill_iotlb(struct vhost_dev *dev,
 				  struct vhost_umem_node *new)
 {
@@ -1239,6 +1255,27 @@ void vhost_iommu_iotlb_inv(struct vhost_dev *dev, struct vhost_umem_node *node)
 	vhost_vq_meta_inv(dev, node);
 	vhost_del_umem_range(dev->iotlb, node->start, node->last);
 	vhost_dev_unlock_vqs(dev);
+}
+
+void vhost_queue__put_iov(struct vhost_virtqueue *vq,
+			struct vhost_umem_node **tlb, int count)
+{
+	struct vhost_dev *dev = vq->dev;
+	struct vhost_umem *umem = dev->iotlb;
+	struct vhost_umem_node *node;
+	int i;
+
+	if (!umem)
+		return;
+
+	for (i = 0; i < count; i++) {
+		node = tlb[i];
+		if (!node)
+			continue;
+		iommu_release(dev->iommu_as, node);
+		vhost_umem_free(umem, node);
+		tlb[i] = NULL;
+	}
 }
 
 static bool iotlb_access_ok(struct vhost_virtqueue *vq,
@@ -1890,8 +1927,15 @@ err:
 }
 EXPORT_SYMBOL_GPL(vhost_vq_init_access);
 
-static int translate_desc(struct vhost_virtqueue *vq, u64 addr, u32 len,
-			  struct iovec iov[], int iov_size, int access)
+enum vhost_iov_type {
+	VHOST_NONE = 0,
+	VHOST_IOV = 1,
+	VHOST_INDIRECT = 2,
+};
+
+static int translate_desc_type(struct vhost_virtqueue *vq, u64 addr, u32 len,
+			  struct iovec iov[], int iov_size, int access,
+			  enum vhost_iov_type type)
 {
 	struct vhost_umem_node *node;
 	struct vhost_dev *dev = vq->dev;
@@ -1941,6 +1985,10 @@ static int translate_desc(struct vhost_virtqueue *vq, u64 addr, u32 len,
 		_iov->iov_len = min((u64)len - s, size);
 		_iov->iov_base = (void __user *)(unsigned long)
 			(node->userspace_addr + addr - node->start);
+		if (type == VHOST_IOV)
+			vq->tlb_iov[_iov - vq->iov] = node;
+		if (type == VHOST_INDIRECT)
+			vq->tlb_indirect[_iov - vq->indirect] = node;
 		s += size;
 		addr += size;
 		++ret;
@@ -1949,6 +1997,24 @@ static int translate_desc(struct vhost_virtqueue *vq, u64 addr, u32 len,
 	if (ret == -EAGAIN)
 		vhost_iotlb_miss(vq, addr, access);
 	return ret;
+}
+
+static int translate_desc_iov(struct vhost_virtqueue *vq, u64 addr, u32 len,
+			  struct iovec iov[], int iov_size, int access)
+{
+	return translate_desc_type(vq, addr, len, iov, iov_size, access, VHOST_IOV);
+}
+
+static int translate_desc_indirect(struct vhost_virtqueue *vq, u64 addr, u32 len,
+			  struct iovec iov[], int iov_size, int access)
+{
+	return translate_desc_type(vq, addr, len, iov, iov_size, access, VHOST_INDIRECT);
+}
+
+static int translate_desc(struct vhost_virtqueue *vq, u64 addr, u32 len,
+			  struct iovec iov[], int iov_size, int access)
+{
+	return translate_desc_type(vq, addr, len, iov, iov_size, access, VHOST_NONE);
 }
 
 /* Each buffer in the virtqueues is actually a chain of descriptors.  This
@@ -1977,7 +2043,7 @@ static int get_indirect(struct vhost_virtqueue *vq,
 	unsigned int i = 0, count, found = 0;
 	u32 len = vhost32_to_cpu(vq, indirect->len);
 	struct iov_iter from;
-	int ret, access;
+	int indirect_ret, ret, access;
 
 	/* Sanity check */
 	if (unlikely(len % sizeof desc)) {
@@ -1988,7 +2054,7 @@ static int get_indirect(struct vhost_virtqueue *vq,
 		return -EINVAL;
 	}
 
-	ret = translate_desc(vq, vhost64_to_cpu(vq, indirect->addr), len, vq->indirect,
+	ret = translate_desc_indirect(vq, vhost64_to_cpu(vq, indirect->addr), len, vq->indirect,
 			     UIO_MAXIOV, VHOST_ACCESS_RO);
 	if (unlikely(ret < 0)) {
 		if (ret != -EAGAIN)
@@ -1996,6 +2062,7 @@ static int get_indirect(struct vhost_virtqueue *vq,
 		return ret;
 	}
 	iov_iter_init(&from, READ, vq->indirect, ret, len);
+	indirect_ret = ret;
 
 	/* We will use the result as an address to read from, so most
 	 * architectures only need a compiler barrier here. */
@@ -2023,6 +2090,8 @@ static int get_indirect(struct vhost_virtqueue *vq,
 			       i, (size_t)vhost64_to_cpu(vq, indirect->addr) + i * sizeof desc);
 			return -EINVAL;
 		}
+		vhost_queue__put_iov(vq, vq->tlb_indirect, indirect_ret);
+
 		if (unlikely(desc.flags & cpu_to_vhost16(vq, VRING_DESC_F_INDIRECT))) {
 			vq_err(vq, "Nested indirect descriptor: idx %d, %zx\n",
 			       i, (size_t)vhost64_to_cpu(vq, indirect->addr) + i * sizeof desc);
@@ -2034,7 +2103,7 @@ static int get_indirect(struct vhost_virtqueue *vq,
 		else
 			access = VHOST_ACCESS_RO;
 
-		ret = translate_desc(vq, vhost64_to_cpu(vq, desc.addr),
+		ret = translate_desc_iov(vq, vhost64_to_cpu(vq, desc.addr),
 				     vhost32_to_cpu(vq, desc.len), iov + iov_count,
 				     iov_size - iov_count, access);
 		if (unlikely(ret < 0)) {
@@ -2176,7 +2245,7 @@ int vhost_get_vq_desc(struct vhost_virtqueue *vq,
 			access = VHOST_ACCESS_WO;
 		else
 			access = VHOST_ACCESS_RO;
-		ret = translate_desc(vq, vhost64_to_cpu(vq, desc.addr),
+		ret = translate_desc_iov(vq, vhost64_to_cpu(vq, desc.addr),
 				     vhost32_to_cpu(vq, desc.len), iov + iov_count,
 				     iov_size - iov_count, access);
 		if (unlikely(ret < 0)) {

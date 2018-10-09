@@ -40,6 +40,13 @@ enum {
 				(1ULL << VIRTIO_IOMMU_F_MAP_UNMAP) |
 				(1ULL << VIRTIO_IOMMU_F_PROBE)
 };
+
+enum iommu_pgtf {
+	IOMMU_PGTF_NONE,
+	IOMMU_PGTF_ARM_LPAE,
+	IOMMU_PGTF_ARM_LPAE_CUVI,
+
+	IOMMU_LAST,
 };
 
 struct viommu_dev {
@@ -85,6 +92,17 @@ struct vhost_iommu_as {
 	struct list_head devices;
 	uint32_t asid;
 	struct kref kref;
+
+	/* ARM stuff */
+	u64				pgd;
+	u64				tcr;
+	u64				mair;
+	bool				cuvi;
+	unsigned long			granule;
+
+	/* Decoded fields */
+	u8				input_bits;
+	void				*pgd_ptr;
 };
 
 static LIST_HEAD(vhost_iommu_list);
@@ -533,6 +551,121 @@ static int vhost_iommu_attach(struct vhost_iommu *vi,
 	return VIRTIO_IOMMU_S_OK;
 }
 
+static int iommu_attach_pgt_arm(struct vhost_virtqueue *vq,
+				struct vhost_iommu_as *as, void *table)
+{
+
+	uint8_t t0sz;
+	int granule;
+	struct virtio_iommu_req_attach_pgt_arm *req = table;
+	uint64_t cuvi_mask = VIRTIO_IOMMU_PGTF_ARM_HPD0 |
+		        VIRTIO_IOMMU_PGTF_ARM_HWU059 |
+			VIRTIO_IOMMU_PGTF_ARM_HA;
+
+	/*
+	 * This is a prototype, therefore I don't care about
+	 * portability.
+	 */
+	as->pgd = vhost64_to_cpu(vq, req->ttbr0);
+	as->tcr = vhost64_to_cpu(vq, req->tcr);
+	as->mair = vhost64_to_cpu(vq, req->mair);
+
+	pr_info("- pgd: 0x%llx", as->pgd);
+	pr_info("- tcr: 0x%llx", as->tcr);
+	pr_info("- mair: 0x%llx", as->mair);
+	pr_info("- asid: 0x%x", as->asid);
+
+	t0sz = as->tcr & VIRTIO_IOMMU_PGTF_ARM_T0SZ_MASK;
+	granule = as->tcr >> VIRTIO_IOMMU_PGTF_ARM_TG0_SHIFT &
+		  VIRTIO_IOMMU_PGTF_ARM_TG0_MASK;
+
+	as->input_bits = 64 - t0sz;
+	switch (granule) {
+	case 0:
+		granule = SZ_4K;
+		break;
+	case 1:
+		granule = SZ_64K;
+		break;
+	case 2:
+		granule = SZ_16K;
+		break;
+	default:
+		pr_err("unknown granule!\n");
+		return VIRTIO_IOMMU_S_INVAL;
+	}
+	as->granule = fls_long(granule) - 1;
+
+	as->pgd_ptr = vhost_guest_to_host(&as->vi->dev, as->pgd);
+	if (!as->pgd_ptr)
+		return VIRTIO_IOMMU_S_INVAL;
+
+	if ((as->tcr & cuvi_mask) == cuvi_mask)
+		as->cuvi = true;
+
+	return 0;
+}
+
+static int vhost_iommu_attach_table(struct vhost_iommu *vi,
+				    struct vhost_virtqueue *vq,
+				    struct virtio_iommu_req_attach_table *req)
+{
+	uint32_t devid, asid;
+	struct vhost_iommu_as *as;
+	struct viommu_dev *vdev;
+	struct vhost_dev *dev;
+	int ret = VIRTIO_IOMMU_S_OK;
+	uint16_t fmt;
+
+	asid = vhost32_to_cpu(vq, req->domain);
+	devid = vhost32_to_cpu(vq, req->endpoint);
+	fmt = vhost16_to_cpu(vq, req->format);
+
+	vdev = vhost_iommu_validate_dev(vi, devid);
+	if (!vdev)
+		return VIRTIO_IOMMU_S_NOENT;
+
+	vdev = vhost_iommu_add_dev(vi, vdev);
+	if (!vdev)
+		return VIRTIO_IOMMU_S_NOENT;
+
+	as = vhost_iommu_get_as(vi, asid);
+	if (!as)
+		return VIRTIO_IOMMU_S_NOENT;
+
+	dev = vdev->dev;
+	dev->iommu_as = as;
+
+	spin_lock(&as->mapping_rbtree_lock);
+	if (as->pgd) {
+		spin_unlock(&as->mapping_rbtree_lock);
+		return VIRTIO_IOMMU_S_NOENT; /* Only one EP per domain supported */
+	}
+
+	switch (fmt) {
+	case VIRTIO_IOMMU_PGTF_ARM_LPAE: {
+		ret = iommu_attach_pgt_arm(vq, as, req);
+		break;
+	}
+	default:
+		pr_err("Unknown page table format 0x%x", req->format);
+		ret = VIRTIO_IOMMU_S_INVAL;
+		break;
+	}
+	spin_unlock(&as->mapping_rbtree_lock);
+
+	if (ret)
+		return ret;
+
+	spin_lock(&vi->lock);
+	list_add(&vdev->list_as, &as->devices);
+	spin_unlock(&vi->lock);
+
+	pr_warning("Using page table fmt = 0x%x", fmt);
+
+	return ret;
+}
+
 static int vhost_iommu_detach(struct vhost_iommu *vi,
 			      struct vhost_virtqueue *vq,
 			      struct virtio_iommu_req_detach *req)
@@ -578,7 +711,6 @@ static int vhost_iommu_map(struct vhost_iommu *vi,
 	       (flags & VIRTIO_IOMMU_MAP_F_WRITE ? VHOST_ACCESS_WO : 0) |
 	       (flags & VIRTIO_IOMMU_MAP_F_EXEC ? VHOST_ACCESS_EXEC : 0) |
 	       (flags & VIRTIO_IOMMU_MAP_F_MMIO ? VHOST_ACCESS_MMIO : 0);
-
 
 	node = kmalloc(sizeof(*node), GFP_ATOMIC);
 	node->start = virt_start;
@@ -709,6 +841,8 @@ static int vhost_probe_add(uint8_t *buf, size_t *cur, int type, void *prop,
 static int vhost_iommu_probe(struct vhost_iommu *vi, struct vhost_virtqueue *vq,
 			     uint8_t *buf, struct virtio_iommu_req_probe *req)
 {
+	struct virtio_iommu_probe_output_size output_prop;
+	struct virtio_iommu_probe_pgtf_arm pgtf;
 	struct virtio_iommu_probe_property head;
 	struct viommu_dev *dev;
 	uint32_t devid;
@@ -719,19 +853,448 @@ static int vhost_iommu_probe(struct vhost_iommu *vi, struct vhost_virtqueue *vq,
 	if (!dev)
 		return VIRTIO_IOMMU_S_NOENT;
 
+	if (vi->config.pgtf) {
+		uint32_t flags = vi->config.pgtf == IOMMU_PGTF_ARM_LPAE_CUVI ?
+				VIRTIO_IOMMU_PGTF_ARM_LPAE_F_HW_ACCESS |
+				VIRTIO_IOMMU_PGTF_ARM_LPAE_F_HW_FLOAT |
+				VIRTIO_IOMMU_PGTF_ARM_LPAE_F_HPD : 0;
+
+		output_prop = (struct virtio_iommu_probe_output_size) {
+			.bits = 48,
+		};
+		vhost_probe_add(buf, &cur, VIRTIO_IOMMU_PROBE_T_OUTPUT_SIZE,
+				&output_prop, sizeof(output_prop));
+
+		pgtf = (struct virtio_iommu_probe_pgtf_arm) {
+			.format		= cpu_to_le16(VIRTIO_IOMMU_PGTF_ARM_LPAE),
+			.asid_bits	= 16,
+			.flags		= cpu_to_le64(flags),
+		};
+		vhost_probe_add(buf, &cur, VIRTIO_IOMMU_PROBE_T_PAGE_TABLE_FMT,
+				&pgtf, sizeof(pgtf));
+	}
+
 	vhost_probe_add(buf, &cur, VIRTIO_IOMMU_PROBE_T_NONE, &head, sizeof(head));
 	return VIRTIO_IOMMU_S_OK;
 }
+
+static int vhost_iommu_inval(struct vhost_iommu *vi, struct vhost_virtqueue *vq,
+			     struct virtio_iommu_req_invalidate *req)
+{
+	uint64_t virt_start, virt_end, size;
+	uint32_t asid, granule, nr_pages;
+	struct vhost_umem_node node;
+	struct vhost_iommu_as *as;
+	struct viommu_dev *dev;
+	size_t pgsize;
+
+	asid = vhost32_to_cpu(vq, req->domain);
+	virt_start = vhost64_to_cpu(vq, req->virt_start);
+	granule = vhost32_to_cpu(vq, req->granule);
+	nr_pages = vhost32_to_cpu(vq, req->nr_pages);
+	pgsize = 1UL << granule;
+	size = nr_pages * pgsize;
+	virt_end = virt_start + size - 1;
+
+	spin_lock(&vi->as_rbtree_lock);
+	as = as_rb_search(vi, asid);
+	if (!as) {
+		pr_err("no asid for %d\n", (int)asid);
+		spin_unlock(&vi->as_rbtree_lock);
+		return VIRTIO_IOMMU_S_NOENT;
+	}
+	spin_unlock(&vi->as_rbtree_lock);
+
+	node.start = virt_start;
+	node.last = virt_end;
+	node.size = size;
+
+	list_for_each_entry(dev, &as->devices, list_as)
+		vhost_iommu_iotlb_inv(dev->dev, &node);
+
+	return VIRTIO_IOMMU_S_OK;
+}
+
+#define ARM_LPAE_4K		0
+#define ARM_LPAE_64K		1
+#define ARM_LPAE_16K		2
+/*
+ * In general this PTW implementation is kinda dumb. I didn't want to spend too
+ * much time polishing it. Hopefully it won't stay, and current performance are
+ * good enough for demo.
+ *
+ * Array of (shift, mask) tuples for each level and each granule. Could deduce
+ * mask from all shifts, but this is simpler.
+ */
+static const int arm_lpae_split[3][5][2] = {
+	/* 4k granule */
+	{{ 39, 0x1ff }, { 30, 0x1ff }, { 21,  0x1ff }, { 12,  0x1ff }, { 0,  0xfff }},
+	/* 64k granule */
+	{{ 0,      0 }, { 42,  0x3f }, { 29, 0x1fff }, { 16, 0x1fff }, { 0, 0xffff }},
+	/* 16k granule */
+	{{ 47,   0x1 }, { 36, 0x7ff }, { 25,  0x7ff }, { 14,  0x7ff }, { 0, 0x3fff }},
+};
+
+#define CTX_TO_SHIFT(ctx)	(arm_lpae_split[(ctx)->granule][(ctx)->lvl][0])
+#define CTX_TO_MASK(ctx)	(arm_lpae_split[(ctx)->granule][(ctx)->lvl][1])
+#define CTX_TO_IDX(ctx)		(((ctx)->addr >> CTX_TO_SHIFT(ctx)) & CTX_TO_MASK(ctx))
+
+/* Rough bitmask, [a:b] inclusive */
+#define BITS(a, b) (((1ULL << ((a) + 1)) - 1) & ~((1ULL << (b)) - 1))
+
+struct iommu_ptw_context {
+	u64		addr;
+	size_t		size;
+	size_t		pgsize;
+	int		prot;
+	int		lvl;
+	int		granule;
+
+	/* Do the PTW to release the entry */
+	int		release;
+	/* CUVI hint on access */
+	int		hint;
+
+	/* Access function (normal/CUVI) */
+	int (*fetch)(u64 *ptep, u64 *out);
+};
+
+static bool perm_fault(u64 desc, struct iommu_ptw_context *ctx)
+{
+	int ap;
+
+	/* Access permission bits */
+	ap = (desc & BITS(7, 6)) >> 5;
+
+	if (ap & 0x4) {
+		/* AP[2] is the nW bit */
+		if (ctx->prot & VHOST_ACCESS_WO) {
+			pr_err("L%d permission fault at 0x%llx", ctx->lvl,
+			       ctx->addr);
+
+			return -EPERM;
+		}
+
+		ctx->prot = VHOST_ACCESS_RO;
+	} else {
+		ctx->prot = VHOST_ACCESS_RW;
+	}
+
+	return 0;
+}
+
+static int xlat_fault(struct iommu_ptw_context *ctx)
+{
+	pr_err("L%d translation fault at 0x%llx", ctx->lvl, ctx->addr);
+	return -EFAULT;
+}
+
+#define NEXT_FETCH			0
+#define FIRST_FETCH			1
+
+#define LPAE_PTE_VALID			(1ULL << 0)
+#define LPAE_PTE_ACCESS			(1ULL << 10)
+/* HWU059 */
+#define CUVI_PTE_FLOAT			(1ULL << 59)
+
+#define CUVI_PTE_INVALID		(0)
+#define CUVI_PTE_VALID			(LPAE_PTE_VALID)
+#define CUVI_PTE_CACHED			(LPAE_PTE_VALID | LPAE_PTE_ACCESS)
+#define CUVI_PTE_USED			(LPAE_PTE_VALID | LPAE_PTE_ACCESS | CUVI_PTE_FLOAT)
+#define CUVI_PTE_MASK			(LPAE_PTE_VALID | LPAE_PTE_ACCESS | CUVI_PTE_FLOAT)
+
+#define cuvi_pte_state(pte)		((pte) & CUVI_PTE_MASK)
+#define cuvi_pte_clear(pte)		((pte) & ~CUVI_PTE_MASK)
+
+#define cuvi_pte_invalid(pte)		(cuvi_pte_clear(pte) | CUVI_PTE_INVALID)
+#define cuvi_pte_valid(pte)		(cuvi_pte_clear(pte) | CUVI_PTE_VALID)
+#define cuvi_pte_used(pte)		(cuvi_pte_clear(pte) | CUVI_PTE_USED)
+#define cuvi_pte_cached(pte)		(cuvi_pte_clear(pte) | CUVI_PTE_CACHED)
+
+#define cuvi_pte_is_invalid(pte)	(cuvi_pte_state(pte) == CUVI_PTE_INVALID)
+#define cuvi_pte_is_valid(pte)		(cuvi_pte_state(pte) == CUVI_PTE_VALID)
+#define cuvi_pte_is_used(pte)		(cuvi_pte_state(pte) == CUVI_PTE_USED)
+#define cuvi_pte_is_cached(pte)		(cuvi_pte_state(pte) == CUVI_PTE_CACHED)
+
+#undef READ_ONCE
+#undef cmpxchg
+#define READ_ONCE(ptep)	(*(volatile u64 *)ptep)
+#define cmpxchg(ptep, old, new)							\
+({										\
+	unsigned long long __expected = old;					\
+	__atomic_compare_exchange_n(ptep, &__expected, new, 0,			\
+				    __ATOMIC_ACQUIRE, __ATOMIC_RELAXED);	\
+})
+
+static int normal_fetch(u64 *ptep, u64 *out)
+{
+	*out = *ptep;
+
+	return NEXT_FETCH;
+}
+
+static int cuvi_fetch(u64 *ptep, u64 *out)
+{
+	u64 pte, valid, used, cached;
+
+	while (true) {
+		pte	= READ_ONCE(ptep);
+		valid	= cuvi_pte_valid(pte);
+		used	= cuvi_pte_used(pte);
+		cached	= cuvi_pte_cached(pte);
+
+		*out = pte;
+
+		if (cuvi_pte_is_invalid(pte))
+			return -EFAULT;
+
+		if (cmpxchg(ptep, valid, cached)) {
+			return FIRST_FETCH;
+		} else if (cmpxchg(ptep, cached, cached) ||
+			   cmpxchg(ptep, used, cached)) {
+			return NEXT_FETCH;
+		}
+
+		/*
+		 * It has to be one of these four states... If we end up here,
+		 * someone modified the PTE. Retry.
+		 */
+	}
+}
+
+static void cuvi_release(u64 *ptep)
+{
+	u64 pte		= READ_ONCE(ptep);
+	u64 cached	= cuvi_pte_cached(pte);
+	u64 used	= cuvi_pte_used(pte);
+
+	WARN_ON(cuvi_pte_is_valid(pte));
+	WARN_ON(cuvi_pte_is_used(pte));
+
+	cmpxchg(ptep, cached, used);
+}
+
+static u64 iommu_l3_ptw(struct vhost_iommu_as *domain,
+			struct iommu_ptw_context *ctx, u64 *ptep)
+{
+	u64 addr_mask, gpa;
+	u64 pte;
+
+	ptep += CTX_TO_IDX(ctx);
+	if (ctx->release) {
+		cuvi_release(ptep);
+		return 0;
+	}
+
+	ctx->hint = ctx->fetch(ptep, &pte);
+	if (ctx->hint < 0 || (pte & 0x3) != 0x3)
+		return xlat_fault(ctx);
+
+	if (perm_fault(pte, ctx))
+		return 0;
+
+	addr_mask = ctx->pgsize - 1;
+
+	gpa = pte & (BITS(47, 0) & ~addr_mask);
+	ctx->size = ctx->pgsize;
+
+	return gpa + (ctx->addr & addr_mask);
+}
+
+static u64 iommu_l2_ptw(struct vhost_iommu_as *domain,
+			struct iommu_ptw_context *ctx, u64 *ptep)
+{
+	u64 addr_mask, table_addr;
+	int type;
+	u64 pte;
+
+	ptep += CTX_TO_IDX(ctx);
+	if (ctx->release == ctx->lvl) {
+		cuvi_release(ptep);
+		return 0;
+	}
+
+	ctx->hint = ctx->fetch(ptep, &pte);
+	type = pte & 0x3;
+	if ((type & 0x1) == 0)
+		return xlat_fault(ctx);
+
+	if (type == 0x1) { /* Block */
+		int split = 0;
+		u64 block_addr;
+
+		switch (ctx->granule) {
+		case ARM_LPAE_4K:
+			split = 20;
+			break;
+		case ARM_LPAE_16K:
+			split = 25;
+			break;
+		case ARM_LPAE_64K:
+			split = 29;
+			break;
+		}
+
+		block_addr = pte & BITS(47, split + 1);
+		addr_mask = BITS(split, 0);
+
+		if (perm_fault(pte, ctx))
+			return 0;
+
+		ctx->size = addr_mask + 1;
+		return block_addr + (ctx->addr & addr_mask);
+	}
+
+	addr_mask = BITS(47, 0) & ~(ctx->pgsize - 1);
+	table_addr = pte & addr_mask;
+	ptep = vhost_guest_to_host(&domain->vi->dev, table_addr);
+	if (!ptep)
+		return xlat_fault(ctx);
+
+	ctx->lvl++;
+	return iommu_l3_ptw(domain, ctx, ptep);
+}
+
+static u64 iommu_l1_ptw(struct vhost_iommu_as *domain,
+			struct iommu_ptw_context *ctx, u64 *ptep)
+{
+	u64 addr_mask, table_addr;
+	int type;
+	u64 pte;
+
+	ptep += CTX_TO_IDX(ctx);
+	if (ctx->release == ctx->lvl) {
+		cuvi_release(ptep);
+		return 0;
+	}
+
+	ctx->hint = ctx->fetch(ptep, &pte);
+	type = pte & 0x3;
+	if ((type & 0x1) == 0)
+		return xlat_fault(ctx);
+
+	if (type == 0x1) { /* Block */
+		u64 block_addr;
+
+		if (ctx->granule != ARM_LPAE_4K)
+			/* No L1 block for 64k and 16k */
+			return xlat_fault(ctx);
+
+		if (perm_fault(pte, ctx))
+			return 0;
+
+		block_addr = pte & BITS(47, 30);
+		addr_mask = BITS(29, 0);
+		ctx->size = addr_mask + 1;
+		return block_addr + (ctx->addr & addr_mask);
+	}
+
+	addr_mask = BITS(47, 0) & ~(ctx->pgsize - 1);
+	table_addr = pte & addr_mask;
+	ptep = vhost_guest_to_host(&domain->vi->dev, table_addr);
+	if (!ptep)
+		return xlat_fault(ctx);
+
+	ctx->lvl++;
+	return iommu_l2_ptw(domain, ctx, ptep);
+}
+
+static u64 iommu_ptw(struct vhost_iommu_as *as, struct iommu_ptw_context *ctx)
+{
+	u64 addr_mask, table_addr;
+	u64 *ptep;
+	int type;
+	u64 pte;
+
+	ctx->pgsize = 1UL << as->granule;
+	switch (ctx->pgsize) {
+	case SZ_4K:
+		ctx->granule = ARM_LPAE_4K;
+		break;
+	case SZ_16K:
+		ctx->granule = ARM_LPAE_16K;
+		break;
+	case SZ_64K:
+		ctx->granule = ARM_LPAE_64K;
+		ctx->lvl = 1;
+		break;
+	}
+
+	ptep = (u64 *)as->pgd_ptr + CTX_TO_IDX(ctx);
+	normal_fetch(ptep, &pte);
+	type = pte & 0x3;
+
+	if ((type & 0x1) == 0 || type == 0x1)
+		return xlat_fault(ctx);
+
+	addr_mask = BITS(47, 0) & ~(ctx->pgsize - 1);
+	table_addr = pte & addr_mask;
+	ptep = vhost_guest_to_host(&as->vi->dev, table_addr);
+	if (!ptep)
+		return xlat_fault(ctx);
+
+	if (++ctx->lvl == 1)
+		return iommu_l1_ptw(as, ctx, ptep);
+	else
+		return iommu_l2_ptw(as, ctx, ptep);
+}
+
+static struct vhost_umem_node *vhost_iommu_pgtable_translate(struct vhost_iommu_as *as,
+						     u64 addr, u64 end,
+						     int prot)
+{
+	size_t size = end - addr + 1;
+	struct vhost_umem_node *node;
+	size_t pg_mask;
+	u64 addr_phys;
+	struct iommu_ptw_context ctx = {
+		.addr		= addr,
+		.size		= size,
+		.prot		= prot,
+		.fetch	= as->cuvi ? cuvi_fetch : normal_fetch,
+	};
+
+	node = kmalloc(sizeof(*node), GFP_ATOMIC);
+	if (!node)
+		return NULL;
+
+	addr_phys = iommu_ptw(as, &ctx);
+	if (!addr_phys) {
+		kfree(node);
+		return NULL;
+	}
+
+	pg_mask = ~((1UL << as->granule) - 1);
+
+	node->start = addr & pg_mask;
+	node->last = end & pg_mask;
+	node->phys_addr = addr_phys & pg_mask;
+	node->size = ctx.size;
+	node->perm = prot;
+	node->userspace_addr = 0;
+	node->iommu_owner = 1;
+	node->release = ctx.lvl;
+	return node;
+}
+
 struct vhost_umem_node *vhost_iommu_translate(struct vhost_iommu_as *as,
 					     u64 addr, u64 end, int access)
 {
 	struct vhost_umem_node *node;
 
 	spin_lock(&as->mapping_rbtree_lock);
+
+	if (as->pgd_ptr) {
+		node = vhost_iommu_pgtable_translate(as, addr, end, access);
+		goto out;
+	}
+
 	node = vhost_iommu_interval_tree_iter_first(&as->rbroot_mapping,
 				addr, end);
 	if (!node || !(node->perm & access))
 		node = NULL;
+
+out:
 	spin_unlock(&as->mapping_rbtree_lock);
 
 	/* Enqueue page fault if necessary */
@@ -739,6 +1302,22 @@ struct vhost_umem_node *vhost_iommu_translate(struct vhost_iommu_as *as,
 		vhost_work_queue(&as->vi->dev, &as->vi->event_work);
 
 	return node;
+}
+
+void iommu_release(struct vhost_iommu_as *as, struct vhost_umem_node *node)
+{
+	struct iommu_ptw_context ctx;
+
+	if (!as || as->cuvi == false || !as->pgd_ptr || !node->release)
+		return;
+
+	ctx = (struct iommu_ptw_context) {
+		.addr		= node->start,
+		.size		= node->size,
+		.fetch		= cuvi_fetch,
+		.release	= node->release,
+	};
+	iommu_ptw(as, &ctx);
 }
 
 static int vhost_iommu_get_resp_size(struct vhost_iommu *vi,
@@ -820,6 +1399,9 @@ static void vhost_iommu_handle_req(struct vhost_iommu *vi,
 		case VIRTIO_IOMMU_T_ATTACH:
 			resp_tail.status = vhost_iommu_attach(vi, vq, buf);
 			break;
+		case VIRTIO_IOMMU_T_ATTACH_TABLE:
+			resp_tail.status = vhost_iommu_attach_table(vi, vq, buf);
+			break;
 		case VIRTIO_IOMMU_T_DETACH:
 			resp_tail.status = vhost_iommu_detach(vi, vq, buf);
 			break;
@@ -828,6 +1410,9 @@ static void vhost_iommu_handle_req(struct vhost_iommu *vi,
 			break;
 		case VIRTIO_IOMMU_T_UNMAP:
 			resp_tail.status = vhost_iommu_unmap(vi, vq, buf);
+			break;
+		case VIRTIO_IOMMU_T_INVALIDATE:
+			resp_tail.status = vhost_iommu_inval(vi, vq, buf);
 			break;
 		case VIRTIO_IOMMU_T_PROBE: {
 			uint8_t *payload_ptr;
