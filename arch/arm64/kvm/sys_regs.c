@@ -1186,6 +1186,11 @@ static bool forward_traps(struct kvm_vcpu *vcpu, u64 control_bit)
 	return false;
 }
 
+static bool forward_tsw_traps(struct kvm_vcpu *vcpu)
+{
+	return forward_traps(vcpu, HCR_TSW);
+}
+
 static bool forward_at_traps(struct kvm_vcpu *vcpu)
 {
 	return forward_traps(vcpu, HCR_AT);
@@ -1428,6 +1433,10 @@ static bool access_id_aa64mmfr0_el1(struct kvm_vcpu *v,
 	return true;
 }
 
+extern bool trap_el2_ich_regs(struct kvm_vcpu *vcpu,
+			 struct sys_reg_params *p,
+			 const struct sys_reg_desc *r);
+
 /*
  * Architected system registers.
  * Important: Must be sorted ascending by Op0, Op1, CRn, CRm, Op2
@@ -1440,10 +1449,6 @@ static bool access_id_aa64mmfr0_el1(struct kvm_vcpu *v,
  * more demanding guest...
  */
 static const struct sys_reg_desc sys_reg_descs[] = {
-	{ SYS_DESC(SYS_DC_ISW), access_dcsw },
-	{ SYS_DESC(SYS_DC_CSW), access_dcsw },
-	{ SYS_DESC(SYS_DC_CISW), access_dcsw },
-
 	DBG_BCR_BVR_WCR_WVR_EL1(0),
 	DBG_BCR_BVR_WCR_WVR_EL1(1),
 	{ SYS_DESC(SYS_MDCCINT_EL1), trap_debug_regs, reset_val, MDCCINT_EL1, 0 },
@@ -1735,6 +1740,41 @@ static const struct sys_reg_desc sys_reg_descs[] = {
 	{ SYS_DESC(SYS_VBAR_EL2), trap_el2_regs, reset_val, VBAR_EL2, 0 },
 	{ SYS_DESC(SYS_RVBAR_EL2), trap_el2_regs, reset_val, RVBAR_EL2, 0 },
 	{ SYS_DESC(SYS_RMR_EL2), trap_el2_regs, reset_val, RMR_EL2, 0 },
+
+	{ SYS_DESC(SYS_ICH_AP0R0_EL2), trap_el2_ich_regs, reset_val, ICH_AP0R0_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_AP0R1_EL2), trap_el2_ich_regs, reset_val, ICH_AP0R1_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_AP0R2_EL2), trap_el2_ich_regs, reset_val, ICH_AP0R2_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_AP0R3_EL2), trap_el2_ich_regs, reset_val, ICH_AP0R3_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_AP1R0_EL2), trap_el2_ich_regs, reset_val, ICH_AP1R0_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_AP1R1_EL2), trap_el2_ich_regs, reset_val, ICH_AP1R1_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_AP1R2_EL2), trap_el2_ich_regs, reset_val, ICH_AP1R2_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_AP1R3_EL2), trap_el2_ich_regs, reset_val, ICH_AP1R3_EL2, 0 },
+
+	{ SYS_DESC(SYS_ICH_VSEIR_EL2), trap_el2_ich_regs, reset_val, ICH_VSEIR_EL2, 0 },
+	{ SYS_DESC(SYS_ICC_SRE_EL2), trap_el2_ich_regs, reset_val, ICH_SRE_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_HCR_EL2), trap_el2_ich_regs, reset_val, ICH_HCR_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_VTR_EL2), trap_el2_ich_regs, reset_val, ICH_VTR_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_MISR_EL2), trap_el2_ich_regs, reset_val, ICH_MISR_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_EISR_EL2), trap_el2_ich_regs, reset_val, ICH_EISR_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_ELSR_EL2), trap_el2_ich_regs, reset_val, ICH_ELSR_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_VMCR_EL2), trap_el2_ich_regs, reset_val, ICH_VMCR_EL2, 0 },
+
+	{ SYS_DESC(SYS_ICH_LR0_EL2), trap_el2_ich_regs, reset_val, ICH_LR0_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_LR1_EL2), trap_el2_ich_regs, reset_val, ICH_LR1_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_LR2_EL2), trap_el2_ich_regs, reset_val, ICH_LR2_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_LR3_EL2), trap_el2_ich_regs, reset_val, ICH_LR3_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_LR4_EL2), trap_el2_ich_regs, reset_val, ICH_LR4_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_LR5_EL2), trap_el2_ich_regs, reset_val, ICH_LR5_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_LR6_EL2), trap_el2_ich_regs, reset_val, ICH_LR6_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_LR7_EL2), trap_el2_ich_regs, reset_val, ICH_LR7_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_LR8_EL2), trap_el2_ich_regs, reset_val, ICH_LR8_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_LR9_EL2), trap_el2_ich_regs, reset_val, ICH_LR9_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_LR10_EL2), trap_el2_ich_regs, reset_val, ICH_LR10_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_LR11_EL2), trap_el2_ich_regs, reset_val, ICH_LR11_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_LR12_EL2), trap_el2_ich_regs, reset_val, ICH_LR12_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_LR13_EL2), trap_el2_ich_regs, reset_val, ICH_LR13_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_LR14_EL2), trap_el2_ich_regs, reset_val, ICH_LR14_EL2, 0 },
+	{ SYS_DESC(SYS_ICH_LR15_EL2), trap_el2_ich_regs, reset_val, ICH_LR15_EL2, 0 },
 
 	{ SYS_DESC(SYS_CONTEXTIDR_EL2), trap_el2_regs, reset_val, CONTEXTIDR_EL2, 0 },
 	{ SYS_DESC(SYS_TPIDR_EL2), trap_el2_regs, reset_val, TPIDR_EL2, 0 },
@@ -2128,12 +2168,17 @@ static bool handle_tlbi_el1(struct kvm_vcpu *vcpu, struct sys_reg_params *p,
 #define SYS_INSN_TO_DESC(insn, access_fn, forward_fn)	\
 	{ SYS_DESC((insn)), (access_fn), NULL, 0, 0, NULL, NULL, (forward_fn) }
 static struct sys_reg_desc sys_insn_descs[] = {
+	SYS_INSN_TO_DESC(SYS_DC_ISW, access_dcsw, forward_tsw_traps),
+
 	SYS_INSN_TO_DESC(AT_S1E1R, handle_s1e01, forward_at_traps),
 	SYS_INSN_TO_DESC(AT_S1E1W, handle_s1e01, forward_at_traps),
 	SYS_INSN_TO_DESC(AT_S1E0R, handle_s1e01, forward_at_traps),
 	SYS_INSN_TO_DESC(AT_S1E0W, handle_s1e01, forward_at_traps),
 	SYS_INSN_TO_DESC(AT_S1E1RP, handle_s1e01, forward_at_traps),
 	SYS_INSN_TO_DESC(AT_S1E1WP, handle_s1e01, forward_at_traps),
+
+	SYS_INSN_TO_DESC(SYS_DC_CSW, access_dcsw, forward_tsw_traps),
+	SYS_INSN_TO_DESC(SYS_DC_CISW, access_dcsw, forward_tsw_traps),
 
 	SYS_INSN_TO_DESC(TLBI_VMALLE1IS, handle_tlbi_el1, forward_ttlb_traps),
 	SYS_INSN_TO_DESC(TLBI_VAE1IS, handle_tlbi_el1, forward_ttlb_traps),
@@ -3285,6 +3330,7 @@ void kvm_sys_reg_table_init(void)
 	BUG_ON(check_sysreg_table(cp15_regs, ARRAY_SIZE(cp15_regs)));
 	BUG_ON(check_sysreg_table(cp15_64_regs, ARRAY_SIZE(cp15_64_regs)));
 	BUG_ON(check_sysreg_table(invariant_sys_regs, ARRAY_SIZE(invariant_sys_regs)));
+	pr_err("%s sys_insn_descs\n", __func__);
 	BUG_ON(check_sysreg_table(sys_insn_descs, ARRAY_SIZE(sys_insn_descs)));
 
 	/* We abuse the reset function to overwrite the table itself. */

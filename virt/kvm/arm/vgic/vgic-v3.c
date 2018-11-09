@@ -103,6 +103,11 @@ void vgic_v3_fold_lr_state(struct kvm_vcpu *vcpu)
 	vgic_cpu->used_lrs = 0;
 }
 
+u64 vgic_v3_get_lr(struct kvm_vcpu *vcpu, int lr)
+{
+	return vcpu->arch.vgic_cpu.vgic_v3.vgic_lr[lr];
+}
+
 /* Requires the irq to be locked already */
 void vgic_v3_populate_lr(struct kvm_vcpu *vcpu, struct vgic_irq *irq, int lr)
 {

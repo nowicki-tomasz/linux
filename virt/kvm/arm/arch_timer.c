@@ -115,6 +115,20 @@ static irqreturn_t kvm_arch_timer_handler(int irq, void *dev_id)
 			   ARCH_TIMER_CTRL_IT_MASK;
 		if (cnt_ctl == (ARCH_TIMER_CTRL_ENABLE | ARCH_TIMER_CTRL_IT_STAT))
 			kvm_timer_update_irq(vcpu, true, vtimer);
+	} else if (!is_hyp_ctxt(vcpu)) {
+		int inject = 0;
+
+		cnt_ctl = read_sysreg_el0(cntv_ctl);
+		cnt_ctl &= ARCH_TIMER_CTRL_ENABLE | ARCH_TIMER_CTRL_IT_STAT |
+			   ARCH_TIMER_CTRL_IT_MASK;
+		if (cnt_ctl == (ARCH_TIMER_CTRL_ENABLE | ARCH_TIMER_CTRL_IT_STAT))
+			inject = 1;
+
+		cnt_ctl = read_sysreg_el0(cntv_ctl);
+		cnt_ctl |= ARCH_TIMER_CTRL_IT_MASK;
+		write_sysreg_el0(cnt_ctl, cntv_ctl);
+		if (inject)
+			kvm_timer_update_irq(vcpu, true, vtimer);
 	}
 
 	if (unlikely(!irqchip_in_kernel(vcpu->kvm)))

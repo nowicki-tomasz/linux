@@ -324,7 +324,42 @@
 #define CNTVOFF_EL2	125	/* Counter-timer Virtual Offset register */
 #define CNTHCTL_EL2	126	/* Counter-timer Hypervisor Control register */
 
-#define	NR_SYS_REGS	127	/* Nothing after this line! */
+#define ICH_AP0R0_EL2	127
+#define ICH_AP0R1_EL2	128
+#define ICH_AP0R2_EL2	129
+#define ICH_AP0R3_EL2	130
+#define ICH_AP1R0_EL2	131
+#define ICH_AP1R1_EL2	132
+#define ICH_AP1R2_EL2	133
+#define ICH_AP1R3_EL2	134
+
+#define ICH_VSEIR_EL2	135
+#define ICH_SRE_EL2	136
+#define ICH_HCR_EL2	137
+#define ICH_VTR_EL2	138
+#define ICH_MISR_EL2	139
+#define ICH_EISR_EL2	140
+#define ICH_ELSR_EL2	141
+#define ICH_VMCR_EL2	142
+
+#define ICH_LR0_EL2	143
+#define ICH_LR1_EL2	144
+#define ICH_LR2_EL2	145
+#define ICH_LR3_EL2	146
+#define ICH_LR4_EL2	147
+#define ICH_LR5_EL2	148
+#define ICH_LR6_EL2	149
+#define ICH_LR7_EL2	150
+#define ICH_LR8_EL2	151
+#define ICH_LR9_EL2	152
+#define ICH_LR10_EL2	153
+#define ICH_LR11_EL2	154
+#define ICH_LR12_EL2	155
+#define ICH_LR13_EL2	156
+#define ICH_LR14_EL2	157
+#define ICH_LR15_EL2	158
+
+#define	NR_SYS_REGS	159	/* Nothing after this line! */
 
 #define	SP_EL1		128	/* Stack pointer (EL1) */
 #define	ELR_EL1		129	/* Exception Link Register */

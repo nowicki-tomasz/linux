@@ -200,6 +200,42 @@ enum vcpu_sysreg {
 	VBAR_EL2,	/* Vector Base Address Register (EL2) */
 	RVBAR_EL2,	/* Reset Vector Base Address Register */
 	RMR_EL2,	/* Reset Management Register */
+
+	ICH_AP0R0_EL2,
+	ICH_AP0R1_EL2,
+	ICH_AP0R2_EL2,
+	ICH_AP0R3_EL2,
+	ICH_AP1R0_EL2,
+	ICH_AP1R1_EL2,
+	ICH_AP1R2_EL2,
+	ICH_AP1R3_EL2,
+
+	ICH_VSEIR_EL2,
+	ICH_SRE_EL2,
+	ICH_HCR_EL2,
+	ICH_VTR_EL2,
+	ICH_MISR_EL2,
+	ICH_EISR_EL2,
+	ICH_ELSR_EL2,
+	ICH_VMCR_EL2,
+
+	ICH_LR0_EL2,
+	ICH_LR1_EL2,
+	ICH_LR2_EL2,
+	ICH_LR3_EL2,
+	ICH_LR4_EL2,
+	ICH_LR5_EL2,
+	ICH_LR6_EL2,
+	ICH_LR7_EL2,
+	ICH_LR8_EL2,
+	ICH_LR9_EL2,
+	ICH_LR10_EL2,
+	ICH_LR11_EL2,
+	ICH_LR12_EL2,
+	ICH_LR13_EL2,
+	ICH_LR14_EL2,
+	ICH_LR15_EL2,
+
 	CONTEXTIDR_EL2,	/* Context ID Register (EL2) */
 	TPIDR_EL2,	/* EL2 Software Thread ID Register */
 	CNTVOFF_EL2,	/* Counter-timer Virtual Offset register */

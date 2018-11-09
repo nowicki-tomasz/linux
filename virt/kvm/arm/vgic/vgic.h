@@ -180,6 +180,7 @@ static inline void vgic_get_irq_kref(struct vgic_irq *irq)
 void vgic_v3_fold_lr_state(struct kvm_vcpu *vcpu);
 void vgic_v3_populate_lr(struct kvm_vcpu *vcpu, struct vgic_irq *irq, int lr);
 void vgic_v3_clear_lr(struct kvm_vcpu *vcpu, int lr);
+u64 vgic_v3_get_lr(struct kvm_vcpu *vcpu, int lr);
 void vgic_v3_set_underflow(struct kvm_vcpu *vcpu);
 void vgic_v3_set_vmcr(struct kvm_vcpu *vcpu, struct vgic_vmcr *vmcr);
 void vgic_v3_get_vmcr(struct kvm_vcpu *vcpu, struct vgic_vmcr *vmcr);
@@ -249,6 +250,12 @@ int vgic_v4_sync_hwstate(struct kvm_vcpu *vcpu);
 int vgic_v4_flush_hwstate(struct kvm_vcpu *vcpu);
 
 int vgic_register_gich_iodev(struct kvm *kvm, struct vgic_dist *dist);
+void vgic_v2_init_nested(struct kvm_vcpu *vcpu);
+void vgic_v3_init_nested(struct kvm_vcpu *vcpu);
+
+void *vcpu_prev_shadow_state(struct kvm_vcpu *vcpu);
+void *vcpu_nested_if(struct kvm_vcpu *vcpu);
+void *vcpu_shadow_if(struct kvm_vcpu *vcpu);
 void vgic_init_nested(struct kvm_vcpu *vcpu);
 
 #endif

@@ -312,3 +312,132 @@ int vgic_v3_cpu_sysregs_uaccess(struct kvm_vcpu *vcpu, bool is_write, u64 id,
 
 	return 0;
 }
+
+#include <linux/irqchip/arm-gic-v3.h>
+
+#include <asm/kvm_emulate.h>
+#include <asm/kvm_arm.h>
+#include <asm/kvm_mmu.h>
+#include <kvm/arm_vgic.h>
+
+#include <asm/cacheflush.h>
+#include <asm/cputype.h>
+#include <asm/debug-monitors.h>
+#include <asm/esr.h>
+#include <asm/kvm_arm.h>
+#include <asm/kvm_asm.h>
+#include <asm/kvm_coproc.h>
+#include <asm/kvm_emulate.h>
+#include <asm/kvm_host.h>
+#include <asm/kvm_mmu.h>
+#include <asm/perf_event.h>
+#include <asm/sysreg.h>
+
+static bool trap_el2_ich_read(struct kvm_vcpu *vcpu,
+			      struct sys_reg_params *p,
+			      const struct sys_reg_desc *r)
+{
+	struct vgic_v3_cpu_if *cpu_if = vcpu_nested_if(vcpu);
+
+	switch(r->reg) {
+	case ICH_AP0R0_EL2 ... ICH_AP0R3_EL2:
+		p->regval = cpu_if->vgic_ap0r[r->reg - ICH_AP0R0_EL2];
+		break;
+	case ICH_AP1R0_EL2 ... ICH_AP1R3_EL2:
+		p->regval = cpu_if->vgic_ap1r[r->reg - ICH_AP1R0_EL2];
+		break;
+	case ICH_LR0_EL2 ... ICH_LR15_EL2:
+		p->regval = cpu_if->vgic_lr[r->reg - ICH_LR0_EL2];
+		break;
+	case ICH_VSEIR_EL2:
+		WARN(1, "%s VSEIR_EL2 usage", __func__);
+		break;
+	case ICH_SRE_EL2:
+		p->regval = cpu_if->vgic_sre;
+		break;
+	case ICH_HCR_EL2:
+		p->regval = cpu_if->vgic_hcr;
+		break;
+	case ICH_VTR_EL2:
+		p->regval = __vgic_v3_get_ich_vtr_el2();
+		break;
+	case ICH_MISR_EL2:
+		WARN(1, "%s MISR_EL2 usage", __func__);
+		break;
+	case ICH_EISR_EL2:
+		WARN(1, "%s EISR_EL2 usage", __func__);
+		break;
+	case ICH_ELSR_EL2:
+		WARN(1, "%s ELSR_EL2 usage", __func__);
+		break;
+	case ICH_VMCR_EL2:
+		p->regval = cpu_if->vgic_vmcr;
+		break;
+	}
+
+	return true;
+}
+
+static bool trap_el2_ich_write(struct kvm_vcpu *vcpu,
+			      struct sys_reg_params *p,
+			      const struct sys_reg_desc *r)
+{
+	struct vgic_v3_cpu_if *cpu_if = vcpu_nested_if(vcpu);
+
+	switch(r->reg) {
+	case ICH_AP0R0_EL2 ... ICH_AP0R3_EL2:
+		cpu_if->vgic_ap0r[r->reg - ICH_AP0R0_EL2] = p->regval;
+		break;
+	case ICH_AP1R0_EL2 ... ICH_AP1R3_EL2:
+		cpu_if->vgic_ap1r[r->reg - ICH_AP1R0_EL2] = p->regval;
+		break;
+	case ICH_LR0_EL2 ... ICH_LR15_EL2:
+		cpu_if->vgic_lr[r->reg - ICH_LR0_EL2] = p->regval;
+		break;
+	case ICH_VSEIR_EL2:
+		WARN(1, "%s VSEIR_EL2 usage", __func__);
+		break;
+	case ICH_SRE_EL2:
+		if (!(p->regval & ICC_SRE_EL1_SRE))
+			return false;
+		break;
+	case ICH_HCR_EL2:
+		cpu_if->vgic_hcr = p->regval;
+		break;
+	case ICH_VTR_EL2:
+		WARN(1, "%s VTR_EL2 usage", __func__);
+		return false;
+		break;
+	case ICH_MISR_EL2:
+		WARN(1, "%s MISR_EL2 usage", __func__);
+		break;
+	case ICH_EISR_EL2:
+		WARN(1, "%s EISR_EL2 usage", __func__);
+		break;
+	case ICH_ELSR_EL2:
+		WARN(1, "%s ELSR_EL2 usage", __func__);
+		break;
+	case ICH_VMCR_EL2:
+		cpu_if->vgic_vmcr = p->regval;
+		break;
+	}
+
+	return true;
+}
+
+bool trap_el2_ich_regs(struct kvm_vcpu *vcpu,
+			 struct sys_reg_params *p,
+			 const struct sys_reg_desc *r)
+{
+	/*
+	 * Forward this trap to the virtual EL2 if the virtual HCR_EL2.NV
+	 * bit is set.
+	 */
+	if (forward_nv_traps(vcpu))
+		return kvm_inject_nested_sync(vcpu, kvm_vcpu_get_hsr(vcpu));
+
+	if (p->is_write)
+		return trap_el2_ich_write(vcpu, p, r);
+
+	return trap_el2_ich_read(vcpu, p, r);
+}

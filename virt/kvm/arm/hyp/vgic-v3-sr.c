@@ -26,6 +26,11 @@
 #define vtr_to_nr_pre_bits(v)		((((u32)(v) >> 26) & 7) + 1)
 #define vtr_to_nr_apr_regs(v)		(1 << (vtr_to_nr_pre_bits(v) - 5))
 
+static __hyp_text struct vgic_v3_cpu_if *__hyp_get_v3_cpu_if(struct kvm_vcpu *vcpu)
+{
+	return kern_hyp_va(vcpu->arch.vgic_cpu.hw_v3_cpu_if);
+}
+
 static u64 __hyp_text __gic_v3_get_lr(unsigned int lr)
 {
 	switch (lr & 0xf) {
@@ -206,8 +211,7 @@ static u32 __hyp_text __vgic_v3_read_ap1rn(int n)
 
 void __hyp_text __vgic_v3_save_state(struct kvm_vcpu *vcpu)
 {
-	struct vgic_v3_cpu_if *cpu_if = &vcpu->arch.vgic_cpu.vgic_v3;
-	u64 used_lrs = vcpu->arch.vgic_cpu.used_lrs;
+	struct vgic_v3_cpu_if *cpu_if = __hyp_get_v3_cpu_if(vcpu);
 	u64 val;
 
 	/*
@@ -219,17 +223,23 @@ void __hyp_text __vgic_v3_save_state(struct kvm_vcpu *vcpu)
 		cpu_if->vgic_vmcr = read_gicreg(ICH_VMCR_EL2);
 	}
 
-	if (used_lrs) {
+	cpu_if->vgic_vmcr = read_gicreg(ICH_VMCR_EL2);
+
+	if (vcpu->arch.vgic_cpu.live_lrs) {
 		int i;
-		u32 nr_pre_bits;
+		u32 max_lr_idx, nr_pre_bits;
 
 		cpu_if->vgic_elrsr = read_gicreg(ICH_ELSR_EL2);
 
 		write_gicreg(0, ICH_HCR_EL2);
 		val = read_gicreg(ICH_VTR_EL2);
+		max_lr_idx = vtr_to_max_lr_idx(val);
 		nr_pre_bits = vtr_to_nr_pre_bits(val);
 
-		for (i = 0; i < used_lrs; i++) {
+		for (i = 0; i <= max_lr_idx; i++) {
+			if (!(vcpu->arch.vgic_cpu.live_lrs & (1UL << i)))
+				continue;
+
 			if (cpu_if->vgic_elrsr & (1 << i))
 				cpu_if->vgic_lr[i] &= ~ICH_LR_STATE;
 			else
@@ -257,6 +267,8 @@ void __hyp_text __vgic_v3_save_state(struct kvm_vcpu *vcpu)
 		default:
 			cpu_if->vgic_ap1r[0] = __vgic_v3_read_ap1rn(0);
 		}
+
+		vcpu->arch.vgic_cpu.live_lrs = 0;
 	} else {
 		if (static_branch_unlikely(&vgic_v3_cpuif_trap) ||
 		    cpu_if->its_vpe.its_vm)
@@ -285,10 +297,10 @@ void __hyp_text __vgic_v3_save_state(struct kvm_vcpu *vcpu)
 
 void __hyp_text __vgic_v3_restore_state(struct kvm_vcpu *vcpu)
 {
-	struct vgic_v3_cpu_if *cpu_if = &vcpu->arch.vgic_cpu.vgic_v3;
-	u64 used_lrs = vcpu->arch.vgic_cpu.used_lrs;
+	struct vgic_v3_cpu_if *cpu_if = __hyp_get_v3_cpu_if(vcpu);
 	u64 val;
-	u32 nr_pre_bits;
+	u32 max_lr_idx, nr_pre_bits;
+	u16 live_lrs = 0;
 	int i;
 
 	/*
@@ -306,10 +318,18 @@ void __hyp_text __vgic_v3_restore_state(struct kvm_vcpu *vcpu)
 		write_gicreg(cpu_if->vgic_vmcr, ICH_VMCR_EL2);
 	}
 
+	write_gicreg(cpu_if->vgic_vmcr, ICH_VMCR_EL2);
+
 	val = read_gicreg(ICH_VTR_EL2);
+	max_lr_idx = vtr_to_max_lr_idx(val);
 	nr_pre_bits = vtr_to_nr_pre_bits(val);
 
-	if (used_lrs) {
+	for (i = 0; i <= max_lr_idx; i++) {
+		if (cpu_if->vgic_lr[i] & ICH_LR_STATE)
+			live_lrs |= (1 << i);
+	}
+
+	if (live_lrs) {
 		write_gicreg(cpu_if->vgic_hcr, ICH_HCR_EL2);
 
 		switch (nr_pre_bits) {
@@ -332,8 +352,12 @@ void __hyp_text __vgic_v3_restore_state(struct kvm_vcpu *vcpu)
 			__vgic_v3_write_ap1rn(cpu_if->vgic_ap1r[0], 0);
 		}
 
-		for (i = 0; i < used_lrs; i++)
+		for (i = 0; i <= max_lr_idx; i++) {
+			if (!(live_lrs & (1 << i)))
+				continue;
+
 			__gic_v3_set_lr(cpu_if->vgic_lr[i], i);
+		}
 	} else {
 		/*
 		 * If we need to trap system registers, we must write
@@ -355,6 +379,7 @@ void __hyp_text __vgic_v3_restore_state(struct kvm_vcpu *vcpu)
 		isb();
 		dsb(sy);
 	}
+	vcpu->arch.vgic_cpu.live_lrs = live_lrs;
 
 	/*
 	 * Prevent the guest from touching the GIC system registers if

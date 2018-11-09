@@ -540,6 +540,8 @@
 #define ICC_IAR1_EL1_SPURIOUS		0x3ff
 
 #define ICC_SRE_EL2_SRE			(1 << 0)
+#define ICC_SRE_EL2_DFB			(1 << 1)
+#define ICC_SRE_EL2_DIB			(1 << 2)
 #define ICC_SRE_EL2_ENABLE		(1 << 3)
 
 #define ICC_SGI1R_TARGET_LIST_SHIFT	0

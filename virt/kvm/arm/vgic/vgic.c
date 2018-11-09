@@ -651,13 +651,12 @@ static inline void vgic_set_underflow(struct kvm_vcpu *vcpu)
 		vgic_v3_set_underflow(vcpu);
 }
 
-static inline u32 vgic_get_lr(struct kvm_vcpu *vcpu, int lr)
+static inline u64 vgic_get_lr(struct kvm_vcpu *vcpu, int lr)
 {
 	if (kvm_vgic_global_state.type == VGIC_V2)
 		return vgic_v2_get_lr(vcpu, lr);
-
-	// TODO: implement vgic_v3_get_lr(). This is 64 bit
-	return 0;
+	else
+		return vgic_v3_get_lr(vcpu, lr);
 }
 
 /* Requires the ap_list_lock to be held. */
@@ -732,10 +731,12 @@ next:
 	 * emulate an IRQ exception to virtual IRQ. Note that a pending IRQ
 	 * means an irq of which state is pending but not active.
 	 */
+#define ICH_LR_PENDING_BIT		(1ULL << 62)
+#define ICH_LR_ACTIVE_BIT		(1ULL << 63)
 	if (vcpu_el2_imo_is_set(vcpu) && !vcpu_mode_el2(vcpu)) {
 		for (i = 0; i < vcpu->arch.vgic_cpu.used_lrs; i++) {
-			u32 vgic_lr = vgic_get_lr(vcpu, i);
-			if ((GICH_LR_PENDING_BIT & vgic_lr) && (!(GICH_LR_ACTIVE_BIT & vgic_lr))) {
+			u64 vgic_lr = vgic_get_lr(vcpu, i);
+			if ((ICH_LR_PENDING_BIT & vgic_lr) && (!(ICH_LR_ACTIVE_BIT & vgic_lr))) {
 				kvm_inject_nested_irq(vcpu);
 				break;
 			}

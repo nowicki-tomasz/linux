@@ -18,20 +18,6 @@
 /* FIXME: This should come from DT */
 #define KVM_VGIC_V2_GICH_BASE          0x08030000
 #define KVM_VGIC_V2_GICH_SIZE          0x2000
-static inline u32 *vcpu_prev_shadow_state(struct kvm_vcpu *vcpu)
-{
-	return vcpu->arch.vgic_cpu.prev_shadow_vgic_v2_lr;
-}
-
-static inline struct vgic_v2_cpu_if *vcpu_nested_if(struct kvm_vcpu *vcpu)
-{
-	return &vcpu->arch.vgic_cpu.nested_vgic_v2;
-}
-
-static inline struct vgic_v2_cpu_if *vcpu_shadow_if(struct kvm_vcpu *vcpu)
-{
-	return &vcpu->arch.vgic_cpu.shadow_vgic_v2;
-}
 
 static unsigned long vgic_mmio_read_v2_vtr(struct kvm_vcpu *vcpu,
 					   gpa_t addr, unsigned int len)
@@ -319,7 +305,7 @@ static void __vgic_propagate_eoi(struct kvm_vcpu *vcpu, u32 val)
 
 /* Assume that shadow_if has the latest lr states and cpu_if has
  * the original phys_id */
-void vgic_propagate_eoi(struct kvm_vcpu *vcpu)
+void vgic_v2_propagate_eoi(struct kvm_vcpu *vcpu)
 {
 	struct vgic_cpu *vgic_cpu = &vcpu->arch.vgic_cpu;
 	struct vgic_v2_cpu_if *cpu_if = vcpu_nested_if(vcpu);
@@ -406,7 +392,7 @@ void vgic_v2_restore_shadow_state(struct kvm_vcpu *vcpu)
 	vgic_cpu->nested_vgic_v2 = vgic_cpu->shadow_vgic_v2;
 }
 
-void vgic_handle_nested_maint_irq(struct kvm_vcpu *vcpu)
+void vgic_v2_handle_nested_maint_irq(struct kvm_vcpu *vcpu)
 {
 	struct vgic_v2_cpu_if *cpu_if = vcpu_nested_if(vcpu);
 
@@ -425,7 +411,7 @@ void vgic_handle_nested_maint_irq(struct kvm_vcpu *vcpu)
 		kvm_inject_nested_irq(vcpu);
 }
 
-void vgic_init_nested(struct kvm_vcpu *vcpu)
+void vgic_v2_init_nested(struct kvm_vcpu *vcpu)
 {
 	struct vgic_cpu *vgic_cpu = &vcpu->arch.vgic_cpu;
 
