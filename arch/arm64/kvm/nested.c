@@ -59,13 +59,8 @@ int kvm_vcpu_init_nested(struct kvm_vcpu *vcpu)
 		       num_mmus * sizeof(*kvm->arch.nested_mmus),
 		       GFP_KERNEL | __GFP_ZERO);
 	if (tmp) {
-		tmp[num_mmus - 1].kvm = kvm;
-		atomic_set(&tmp[num_mmus - 1].refcnt, 0);
-		tmp[num_mmus - 2].kvm = kvm;
-		atomic_set(&tmp[num_mmus - 2].refcnt, 0);
-
-		if (kvm_alloc_stage2_pgd(&tmp[num_mmus - 1]) ||
-		    kvm_alloc_stage2_pgd(&tmp[num_mmus - 2])) {
+		if (kvm_init_stage2_mmu(kvm, &tmp[num_mmus - 1]) ||
+		    kvm_init_stage2_mmu(kvm, &tmp[num_mmus - 2])) {
 			kvm_free_stage2_pgd(&tmp[num_mmus - 1]);
 			kvm_free_stage2_pgd(&tmp[num_mmus - 2]);
 		} else {
@@ -445,7 +440,7 @@ out:
 	return s2_mmu;
 }
 
-void kvm_init_s2_mmu(struct kvm_s2_mmu *mmu)
+void kvm_init_nested_s2_mmu(struct kvm_s2_mmu *mmu)
 {
 	mmu->vttbr = 1;
 	mmu->nested_stage2_enabled = false;
