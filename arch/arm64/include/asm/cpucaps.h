@@ -59,7 +59,8 @@
 #define ARM64_HAS_E0PD				49
 #define ARM64_HAS_RNG				50
 #define ARM64_HAS_NESTED_VIRT			51
+#define ARM64_HAS_ARMv8_4_TTL			52
 
-#define ARM64_NCAPS				52
+#define ARM64_NCAPS				53
 
 #endif /* __ASM_CPUCAPS_H */
