@@ -337,7 +337,8 @@ static bool __hyp_text __populate_fault_info(struct kvm_vcpu *vcpu)
 	esr = vcpu->arch.fault.esr_el2;
 	ec = ESR_ELx_EC(esr);
 
-	if (ec != ESR_ELx_EC_DABT_LOW && ec != ESR_ELx_EC_IABT_LOW)
+	if (ec != ESR_ELx_EC_DABT_LOW && ec != ESR_ELx_EC_IABT_LOW &&
+	    ec != ESR_ELx_EC_DABT_CUR)
 		return true;
 
 	far = read_sysreg_el2(SYS_FAR);

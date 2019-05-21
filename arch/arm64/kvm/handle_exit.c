@@ -211,8 +211,10 @@ static int kvm_handle_unknown_ec(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	u32 hsr = kvm_vcpu_get_hsr(vcpu);
 
-	kvm_pr_unimpl("Unknown exception class: hsr: %#08x -- %s\n",
-		      hsr, esr_get_class_string(hsr));
+	kvm_pr_unimpl("Unknown exception class: hsr: %#08x -- %s FAR 0x%lx IPA 0x%lx\n",
+		      hsr, esr_get_class_string(hsr),
+		      (long)kvm_vcpu_get_hfar(vcpu),
+		      (long)kvm_vcpu_get_fault_ipa(vcpu));
 
 	kvm_inject_undefined(vcpu);
 	return 1;
