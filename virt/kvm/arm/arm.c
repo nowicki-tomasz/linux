@@ -276,6 +276,8 @@ struct kvm_vcpu *kvm_arch_vcpu_create(struct kvm *kvm, unsigned int id)
 	if (err)
 		goto vcpu_uninit;
 
+	kvm_sysregs_vcpu_init_default(&vcpu->arch.ctxt);
+
 	return vcpu;
 vcpu_uninit:
 	kvm_vcpu_uninit(vcpu);
@@ -1697,6 +1699,13 @@ int kvm_arch_init(void *opaque)
 		err = init_hyp_mode();
 		if (err)
 			goto out_err;
+	}
+
+	for_each_possible_cpu(cpu) {
+		kvm_host_data_t *cpu_data;
+
+		cpu_data = per_cpu_ptr(&kvm_host_data, cpu);
+		kvm_sysregs_vcpu_init_default(&cpu_data->host_ctxt);
 	}
 
 	err = init_subsystems();

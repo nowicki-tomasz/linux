@@ -37,7 +37,7 @@
 
 static void __hyp_text __sysreg_save_common_state(struct kvm_cpu_context *ctxt)
 {
-	ctxt->sys_regs[MDSCR_EL1]	= read_sysreg(mdscr_el1);
+	__ctx_sys_reg(ctxt, MDSCR_EL1)	= read_sysreg(mdscr_el1);
 
 	/*
 	 * The host arm64 Linux uses sp_el0 to point to 'current' and it must
@@ -48,42 +48,42 @@ static void __hyp_text __sysreg_save_common_state(struct kvm_cpu_context *ctxt)
 
 static void __hyp_text __sysreg_save_user_state(struct kvm_cpu_context *ctxt)
 {
-	ctxt->sys_regs[TPIDR_EL0]	= read_sysreg(tpidr_el0);
-	ctxt->sys_regs[TPIDRRO_EL0]	= read_sysreg(tpidrro_el0);
+	__ctx_sys_reg(ctxt, TPIDR_EL0)		= read_sysreg(tpidr_el0);
+	__ctx_sys_reg(ctxt, TPIDRRO_EL0)	= read_sysreg(tpidrro_el0);
 }
 
 static void __hyp_text __sysreg_save_vel1_state(struct kvm_cpu_context *ctxt)
 {
-	ctxt->sys_regs[SCTLR_EL1]	= read_sysreg_el1(SYS_SCTLR);
-	ctxt->sys_regs[CPACR_EL1]	= read_sysreg_el1(SYS_CPACR);
-	ctxt->sys_regs[TTBR0_EL1]	= read_sysreg_el1(SYS_TTBR0);
-	ctxt->sys_regs[TTBR1_EL1]	= read_sysreg_el1(SYS_TTBR1);
-	ctxt->sys_regs[TCR_EL1]		= read_sysreg_el1(SYS_TCR);
-	ctxt->sys_regs[ESR_EL1]		= read_sysreg_el1(SYS_ESR);
-	ctxt->sys_regs[AFSR0_EL1]	= read_sysreg_el1(SYS_AFSR0);
-	ctxt->sys_regs[AFSR1_EL1]	= read_sysreg_el1(SYS_AFSR1);
-	ctxt->sys_regs[FAR_EL1]		= read_sysreg_el1(SYS_FAR);
-	ctxt->sys_regs[MAIR_EL1]	= read_sysreg_el1(SYS_MAIR);
-	ctxt->sys_regs[VBAR_EL1]	= read_sysreg_el1(SYS_VBAR);
-	ctxt->sys_regs[CONTEXTIDR_EL1]	= read_sysreg_el1(SYS_CONTEXTIDR);
-	ctxt->sys_regs[AMAIR_EL1]	= read_sysreg_el1(SYS_AMAIR);
-	ctxt->sys_regs[CNTKCTL_EL1]	= read_sysreg_el1(SYS_CNTKCTL);
+	__ctx_sys_reg(ctxt, SCTLR_EL1)		= read_sysreg_el1(SYS_SCTLR);
+	__ctx_sys_reg(ctxt, CPACR_EL1)		= read_sysreg_el1(SYS_CPACR);
+	__ctx_sys_reg(ctxt, TTBR0_EL1)		= read_sysreg_el1(SYS_TTBR0);
+	__ctx_sys_reg(ctxt, TTBR1_EL1)		= read_sysreg_el1(SYS_TTBR1);
+	__ctx_sys_reg(ctxt, TCR_EL1)		= read_sysreg_el1(SYS_TCR);
+	__ctx_sys_reg(ctxt, ESR_EL1)		= read_sysreg_el1(SYS_ESR);
+	__ctx_sys_reg(ctxt, AFSR0_EL1)		= read_sysreg_el1(SYS_AFSR0);
+	__ctx_sys_reg(ctxt, AFSR1_EL1)		= read_sysreg_el1(SYS_AFSR1);
+	__ctx_sys_reg(ctxt, FAR_EL1)		= read_sysreg_el1(SYS_FAR);
+	__ctx_sys_reg(ctxt, MAIR_EL1)		= read_sysreg_el1(SYS_MAIR);
+	__ctx_sys_reg(ctxt, VBAR_EL1)		= read_sysreg_el1(SYS_VBAR);
+	__ctx_sys_reg(ctxt, CONTEXTIDR_EL1)	= read_sysreg_el1(SYS_CONTEXTIDR);
+	__ctx_sys_reg(ctxt, AMAIR_EL1)		= read_sysreg_el1(SYS_AMAIR);
+	__ctx_sys_reg(ctxt, CNTKCTL_EL1)	= read_sysreg_el1(SYS_CNTKCTL);
 
-	ctxt->gp_regs.sp_el1		= read_sysreg(sp_el1);
-	ctxt->gp_regs.elr_el1		= read_sysreg_el1(SYS_ELR);
-	ctxt->gp_regs.spsr[KVM_SPSR_EL1]= read_sysreg_el1(SYS_SPSR);
+	__ctx_sp_el1(ctxt)	= read_sysreg(sp_el1);
+	__ctx_elr_el1(ctxt)	= read_sysreg_el1(SYS_ELR);
+	__ctx_spsr_el1(ctxt)	= read_sysreg_el1(SYS_SPSR);
 }
 
 static void __sysreg_save_vel2_state(struct kvm_cpu_context *ctxt)
 {
-	ctxt->sys_regs[ESR_EL2]		= read_sysreg_el1(SYS_ESR);
-	ctxt->sys_regs[AFSR0_EL2]	= read_sysreg_el1(SYS_AFSR0);
-	ctxt->sys_regs[AFSR1_EL2]	= read_sysreg_el1(SYS_AFSR1);
-	ctxt->sys_regs[FAR_EL2]		= read_sysreg_el1(SYS_FAR);
-	ctxt->sys_regs[MAIR_EL2]	= read_sysreg_el1(SYS_MAIR);
-	ctxt->sys_regs[VBAR_EL2]	= read_sysreg_el1(SYS_VBAR);
-	ctxt->sys_regs[CONTEXTIDR_EL2]	= read_sysreg_el1(SYS_CONTEXTIDR);
-	ctxt->sys_regs[AMAIR_EL2]	= read_sysreg_el1(SYS_AMAIR);
+	__ctx_sys_reg(ctxt, ESR_EL2)		= read_sysreg_el1(SYS_ESR);
+	__ctx_sys_reg(ctxt, AFSR0_EL2)		= read_sysreg_el1(SYS_AFSR0);
+	__ctx_sys_reg(ctxt, AFSR1_EL2)		= read_sysreg_el1(SYS_AFSR1);
+	__ctx_sys_reg(ctxt, FAR_EL2)		= read_sysreg_el1(SYS_FAR);
+	__ctx_sys_reg(ctxt, MAIR_EL2)		= read_sysreg_el1(SYS_MAIR);
+	__ctx_sys_reg(ctxt, VBAR_EL2)		= read_sysreg_el1(SYS_VBAR);
+	__ctx_sys_reg(ctxt, CONTEXTIDR_EL2)	= read_sysreg_el1(SYS_CONTEXTIDR);
+	__ctx_sys_reg(ctxt, AMAIR_EL2)		= read_sysreg_el1(SYS_AMAIR);
 
 	/*
 	 * In VHE mode those registers are compatible between EL1 and EL2,
@@ -94,25 +94,25 @@ static void __sysreg_save_vel2_state(struct kvm_cpu_context *ctxt)
 	 * to save anything here.
 	 */
 	if (__vcpu_el2_e2h_is_set(ctxt)) {
-		ctxt->sys_regs[SCTLR_EL2]	= read_sysreg_el1(SYS_SCTLR);
-		ctxt->sys_regs[CPTR_EL2]	= read_sysreg_el1(SYS_CPACR);
-		ctxt->sys_regs[TTBR0_EL2]	= read_sysreg_el1(SYS_TTBR0);
-		ctxt->sys_regs[TTBR1_EL2]	= read_sysreg_el1(SYS_TTBR1);
-		ctxt->sys_regs[TCR_EL2]		= read_sysreg_el1(SYS_TCR);
-		ctxt->sys_regs[CNTHCTL_EL2]	= read_sysreg_el1(SYS_CNTKCTL);
+		__ctx_sys_reg(ctxt, SCTLR_EL2)		= read_sysreg_el1(SYS_SCTLR);
+		__ctx_sys_reg(ctxt, CPTR_EL2)		= read_sysreg_el1(SYS_CPACR);
+		__ctx_sys_reg(ctxt, TTBR0_EL2)		= read_sysreg_el1(SYS_TTBR0);
+		__ctx_sys_reg(ctxt, TTBR1_EL2)		= read_sysreg_el1(SYS_TTBR1);
+		__ctx_sys_reg(ctxt, TCR_EL2)		= read_sysreg_el1(SYS_TCR);
+		__ctx_sys_reg(ctxt, CNTHCTL_EL2)	= read_sysreg_el1(SYS_CNTKCTL);
 	}
 
-	ctxt->sys_regs[SP_EL2]		= read_sysreg(sp_el1);
-	ctxt->sys_regs[ELR_EL2]		= read_sysreg_el1(SYS_ELR);
-	ctxt->sys_regs[SPSR_EL2]	= __fixup_spsr_el2_read(ctxt, read_sysreg_el1(SYS_SPSR));
+	__ctx_sys_reg(ctxt, SP_EL2)	= read_sysreg(sp_el1);
+	__ctx_sys_reg(ctxt, ELR_EL2)	= read_sysreg_el1(SYS_ELR);
+	__ctx_sys_reg(ctxt, SPSR_EL2)	= __fixup_spsr_el2_read(ctxt, read_sysreg_el1(SYS_SPSR));
 }
 
 static void __hyp_text __sysreg_save_el1_state(struct kvm_cpu_context *ctxt)
 {
-	ctxt->sys_regs[CSSELR_EL1]	= read_sysreg(csselr_el1);
-	ctxt->sys_regs[ACTLR_EL1]	= read_sysreg(actlr_el1);
-	ctxt->sys_regs[PAR_EL1]		= read_sysreg(par_el1);
-	ctxt->sys_regs[TPIDR_EL1]	= read_sysreg(tpidr_el1);
+	__ctx_sys_reg(ctxt, CSSELR_EL1)	= read_sysreg(csselr_el1);
+	__ctx_sys_reg(ctxt, ACTLR_EL1)	= read_sysreg(actlr_el1);
+	__ctx_sys_reg(ctxt, PAR_EL1)	= read_sysreg(par_el1);
+	__ctx_sys_reg(ctxt, TPIDR_EL1)	= read_sysreg(tpidr_el1);
 
 	if (unlikely(__is_hyp_ctxt(ctxt)))
 		__sysreg_save_vel2_state(ctxt);
@@ -148,7 +148,7 @@ static void __hyp_text __sysreg_save_el2_return_state(struct kvm_cpu_context *ct
 	ctxt->gp_regs.regs.pstate	= from_hw_pstate(ctxt);
 
 	if (cpus_have_const_cap(ARM64_HAS_RAS_EXTN))
-		ctxt->sys_regs[DISR_EL1] = read_sysreg_s(SYS_VDISR_EL2);
+		__ctx_sys_reg(ctxt, DISR_EL1) = read_sysreg_s(SYS_VDISR_EL2);
 }
 
 void __hyp_text __sysreg_save_state_nvhe(struct kvm_cpu_context *ctxt)
@@ -174,7 +174,7 @@ NOKPROBE_SYMBOL(sysreg_save_guest_state_vhe);
 
 static void __hyp_text __sysreg_restore_common_state(struct kvm_cpu_context *ctxt)
 {
-	write_sysreg(ctxt->sys_regs[MDSCR_EL1],	  mdscr_el1);
+	write_sysreg(__ctx_sys_reg(ctxt, MDSCR_EL1),	  mdscr_el1);
 
 	/*
 	 * The host arm64 Linux uses sp_el0 to point to 'current' and it must
@@ -185,8 +185,8 @@ static void __hyp_text __sysreg_restore_common_state(struct kvm_cpu_context *ctx
 
 static void __hyp_text __sysreg_restore_user_state(struct kvm_cpu_context *ctxt)
 {
-	write_sysreg(ctxt->sys_regs[TPIDR_EL0],		tpidr_el0);
-	write_sysreg(ctxt->sys_regs[TPIDRRO_EL0],	tpidrro_el0);
+	write_sysreg(__ctx_sys_reg(ctxt, TPIDR_EL0),		tpidr_el0);
+	write_sysreg(__ctx_sys_reg(ctxt, TPIDRRO_EL0),		tpidrro_el0);
 }
 
 static void __sysreg_restore_vel2_state(struct kvm_cpu_context *ctxt)
@@ -194,33 +194,32 @@ static void __sysreg_restore_vel2_state(struct kvm_cpu_context *ctxt)
 	u64 val;
 
 	write_sysreg(read_cpuid_id(),			vpidr_el2);
-	write_sysreg(ctxt->sys_regs[MPIDR_EL1],		vmpidr_el2);
-	write_sysreg_el1(ctxt->sys_regs[MAIR_EL2],	SYS_MAIR);
-	write_sysreg_el1(ctxt->sys_regs[VBAR_EL2],	SYS_VBAR);
-	write_sysreg_el1(ctxt->sys_regs[CONTEXTIDR_EL2],SYS_CONTEXTIDR);
-	write_sysreg_el1(ctxt->sys_regs[AMAIR_EL2],	SYS_AMAIR);
+	write_sysreg(__ctx_sys_reg(ctxt, MPIDR_EL1),		vmpidr_el2);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, MAIR_EL2),		SYS_MAIR);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, VBAR_EL2),		SYS_VBAR);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, CONTEXTIDR_EL2),	SYS_CONTEXTIDR);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, AMAIR_EL2),	SYS_AMAIR);
 
 	if (__vcpu_el2_e2h_is_set(ctxt)) {
 		/*
 		 * In VHE mode those registers are compatible between
 		 * EL1 and EL2.
 		 */
-		write_sysreg_el1(ctxt->sys_regs[SCTLR_EL2],	SYS_SCTLR);
-		write_sysreg_el1(ctxt->sys_regs[CPTR_EL2],	SYS_CPACR);
-		write_sysreg_el1(ctxt->sys_regs[TTBR0_EL2],	SYS_TTBR0);
-		write_sysreg_el1(ctxt->sys_regs[TTBR1_EL2],	SYS_TTBR1);
-		write_sysreg_el1(ctxt->sys_regs[TCR_EL2],	SYS_TCR);
-		write_sysreg_el1(ctxt->sys_regs[CNTHCTL_EL2],	SYS_CNTKCTL);
+		write_sysreg_el1(__ctx_sys_reg(ctxt, SCTLR_EL2),	SYS_SCTLR);
+		write_sysreg_el1(__ctx_sys_reg(ctxt, CPTR_EL2),		SYS_CPACR);
+		write_sysreg_el1(__ctx_sys_reg(ctxt, TTBR0_EL2),	SYS_TTBR0);
+		write_sysreg_el1(__ctx_sys_reg(ctxt, TTBR1_EL2),	SYS_TTBR1);
+		write_sysreg_el1(__ctx_sys_reg(ctxt, TCR_EL2),		SYS_TCR);
+		write_sysreg_el1(__ctx_sys_reg(ctxt, CNTHCTL_EL2),	SYS_CNTKCTL);
 	} else {
-		write_sysreg_el1(translate_sctlr(ctxt->sys_regs[SCTLR_EL2]),
+		write_sysreg_el1(translate_sctlr(__ctx_sys_reg(ctxt, SCTLR_EL2)),
 				 SYS_SCTLR);
-		write_sysreg_el1(translate_cptr(ctxt->sys_regs[CPTR_EL2]),
+		write_sysreg_el1(translate_cptr(__ctx_sys_reg(ctxt, CPTR_EL2)),
 				 SYS_CPACR);
-		write_sysreg_el1(translate_ttbr0(ctxt->sys_regs[TTBR0_EL2]),
+		write_sysreg_el1(translate_ttbr0(__ctx_sys_reg(ctxt, TTBR0_EL2)),
 				 SYS_TTBR0);
-		write_sysreg_el1(translate_tcr(ctxt->sys_regs[TCR_EL2]),
-				 SYS_TCR);
-		write_sysreg_el1(translate_cnthctl(ctxt->sys_regs[CNTHCTL_EL2]),
+		write_sysreg_el1(translate_tcr(__ctx_sys_reg(ctxt, TCR_EL2)), SYS_TCR);
+		write_sysreg_el1(translate_cnthctl(__ctx_sys_reg(ctxt, CNTHCTL_EL2)),
 				 SYS_CNTKCTL);
 	}
 
@@ -228,14 +227,14 @@ static void __sysreg_restore_vel2_state(struct kvm_cpu_context *ctxt)
 	 * These registers can be modified behind our back by a fault
 	 * taken inside vEL2. Save them, always.
 	 */
-	write_sysreg_el1(ctxt->sys_regs[ESR_EL2],	SYS_ESR);
-	write_sysreg_el1(ctxt->sys_regs[AFSR0_EL2],	SYS_AFSR0);
-	write_sysreg_el1(ctxt->sys_regs[AFSR1_EL2],	SYS_AFSR1);
-	write_sysreg_el1(ctxt->sys_regs[FAR_EL2],	SYS_FAR);
-	write_sysreg(ctxt->sys_regs[SP_EL2],		sp_el1);
-	write_sysreg_el1(ctxt->sys_regs[ELR_EL2],	SYS_ELR);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, ESR_EL2),		SYS_ESR);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, AFSR0_EL2),	SYS_AFSR0);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, AFSR1_EL2),	SYS_AFSR1);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, FAR_EL2),		SYS_FAR);
+	write_sysreg(__ctx_sys_reg(ctxt, SP_EL2),		sp_el1);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, ELR_EL2),		SYS_ELR);
 
-	val = __fixup_spsr_el2_write(ctxt, ctxt->sys_regs[SPSR_EL2]);
+	val = __fixup_spsr_el2_write(ctxt, __ctx_sys_reg(ctxt, SPSR_EL2));
 	write_sysreg_el1(val,	SYS_SPSR);
 }
 
@@ -259,50 +258,50 @@ static void __hyp_text __sysreg_restore_vel1_state(struct kvm_cpu_context *ctxt)
 			 * only time it changes. We'll restore the MIDR_EL1
 			 * view on put.
 			 */
-			write_sysreg(ctxt->sys_regs[VPIDR_EL2],	vpidr_el2);
+			write_sysreg(__ctx_sys_reg(ctxt, VPIDR_EL2),	vpidr_el2);
 
 			/*
 			 * As we're restoring a nested guest, set the value
 			 * provided by the guest hypervisor.
 			 */
-			mpidr = ctxt->sys_regs[VMPIDR_EL2];
+			mpidr = __ctx_sys_reg(ctxt, VMPIDR_EL2);
 		} else {
-			mpidr = ctxt->sys_regs[MPIDR_EL1];
+			mpidr = __ctx_sys_reg(ctxt, MPIDR_EL1);
 		}
 	} else {
-		mpidr = ctxt->sys_regs[MPIDR_EL1];
+		mpidr = __ctx_sys_reg(ctxt, MPIDR_EL1);
 	}
 
-	write_sysreg(mpidr,				vmpidr_el2);
-	write_sysreg_el1(ctxt->sys_regs[SCTLR_EL1],	SYS_SCTLR);
-	write_sysreg(ctxt->sys_regs[ACTLR_EL1],		actlr_el1);
-	write_sysreg_el1(ctxt->sys_regs[CPACR_EL1],	SYS_CPACR);
-	write_sysreg_el1(ctxt->sys_regs[TTBR0_EL1],	SYS_TTBR0);
-	write_sysreg_el1(ctxt->sys_regs[TTBR1_EL1],	SYS_TTBR1);
-	write_sysreg_el1(ctxt->sys_regs[TCR_EL1],	SYS_TCR);
-	write_sysreg_el1(ctxt->sys_regs[ESR_EL1],	SYS_ESR);
-	write_sysreg_el1(ctxt->sys_regs[AFSR0_EL1],	SYS_AFSR0);
-	write_sysreg_el1(ctxt->sys_regs[AFSR1_EL1],	SYS_AFSR1);
-	write_sysreg_el1(ctxt->sys_regs[FAR_EL1],	SYS_FAR);
-	write_sysreg_el1(ctxt->sys_regs[MAIR_EL1],	SYS_MAIR);
-	write_sysreg_el1(ctxt->sys_regs[VBAR_EL1],	SYS_VBAR);
-	write_sysreg_el1(ctxt->sys_regs[CONTEXTIDR_EL1],SYS_CONTEXTIDR);
-	write_sysreg_el1(ctxt->sys_regs[AMAIR_EL1],	SYS_AMAIR);
-	write_sysreg_el1(ctxt->sys_regs[CNTKCTL_EL1],	SYS_CNTKCTL);
+	write_sysreg(mpidr,					vmpidr_el2);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, SCTLR_EL1),	SYS_SCTLR);
+	write_sysreg(__ctx_sys_reg(ctxt, ACTLR_EL1),	  	actlr_el1);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, CPACR_EL1),	SYS_CPACR);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, TTBR0_EL1),	SYS_TTBR0);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, TTBR1_EL1),	SYS_TTBR1);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, TCR_EL1),		SYS_TCR);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, ESR_EL1),		SYS_ESR);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, AFSR0_EL1),	SYS_AFSR0);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, AFSR1_EL1),	SYS_AFSR1);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, FAR_EL1),		SYS_FAR);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, MAIR_EL1),		SYS_MAIR);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, VBAR_EL1),		SYS_VBAR);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, CONTEXTIDR_EL1),	SYS_CONTEXTIDR);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, AMAIR_EL1),	SYS_AMAIR);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, CNTKCTL_EL1), 	SYS_CNTKCTL);
 	write_sysreg(ctxt->sys_regs[PAR_EL1],		par_el1);
 	write_sysreg(ctxt->sys_regs[TPIDR_EL1],		tpidr_el1);
 
-	write_sysreg(ctxt->gp_regs.sp_el1,		sp_el1);
-	write_sysreg_el1(ctxt->gp_regs.elr_el1,		SYS_ELR);
-	write_sysreg_el1(ctxt->gp_regs.spsr[KVM_SPSR_EL1],SYS_SPSR);
+	write_sysreg(__ctx_sp_el1(ctxt),	sp_el1);
+	write_sysreg_el1(__ctx_elr_el1(ctxt),	SYS_ELR);
+	write_sysreg_el1(__ctx_spsr_el1(ctxt),	SYS_SPSR);
 }
 
 static void __hyp_text __sysreg_restore_el1_state(struct kvm_cpu_context *ctxt)
 {
-	write_sysreg(ctxt->sys_regs[CSSELR_EL1],	csselr_el1);
-	write_sysreg(ctxt->sys_regs[ACTLR_EL1],	  	actlr_el1);
-	write_sysreg(ctxt->sys_regs[PAR_EL1],		par_el1);
-	write_sysreg(ctxt->sys_regs[TPIDR_EL1],		tpidr_el1);
+	write_sysreg(__ctx_sys_reg(ctxt, CSSELR_EL1),	csselr_el1);
+	write_sysreg(__ctx_sys_reg(ctxt, ACTLR_EL1),  	actlr_el1);
+	write_sysreg(__ctx_sys_reg(ctxt, PAR_EL1),	par_el1);
+	write_sysreg(__ctx_sys_reg(ctxt, TPIDR_EL1),	tpidr_el1);
 
 	if (__is_hyp_ctxt(ctxt))
 		__sysreg_restore_vel2_state(ctxt);
@@ -349,7 +348,7 @@ __sysreg_restore_el2_return_state(struct kvm_cpu_context *ctxt)
 	write_sysreg_el2(pstate,			SYS_SPSR);
 
 	if (cpus_have_const_cap(ARM64_HAS_RAS_EXTN))
-		write_sysreg_s(ctxt->sys_regs[DISR_EL1], SYS_VDISR_EL2);
+		write_sysreg_s(__ctx_sys_reg(ctxt, DISR_EL1), SYS_VDISR_EL2);
 }
 
 void __hyp_text __sysreg_restore_state_nvhe(struct kvm_cpu_context *ctxt)
@@ -375,46 +374,46 @@ NOKPROBE_SYMBOL(sysreg_restore_guest_state_vhe);
 
 void __hyp_text __sysreg32_save_state(struct kvm_vcpu *vcpu)
 {
-	u64 *spsr, *sysreg;
+	struct kvm_cpu_context *ctxt = &vcpu->arch.ctxt;
+	u64 *spsr;
 
 	if (!vcpu_el1_is_32bit(vcpu))
 		return;
 
 	spsr = vcpu->arch.ctxt.gp_regs.spsr;
-	sysreg = vcpu->arch.ctxt.sys_regs;
 
 	spsr[KVM_SPSR_ABT] = read_sysreg(spsr_abt);
 	spsr[KVM_SPSR_UND] = read_sysreg(spsr_und);
 	spsr[KVM_SPSR_IRQ] = read_sysreg(spsr_irq);
 	spsr[KVM_SPSR_FIQ] = read_sysreg(spsr_fiq);
 
-	sysreg[DACR32_EL2] = read_sysreg(dacr32_el2);
-	sysreg[IFSR32_EL2] = read_sysreg(ifsr32_el2);
+	__ctx_sys_reg(ctxt, DACR32_EL2) = read_sysreg(dacr32_el2);
+	__ctx_sys_reg(ctxt, IFSR32_EL2) = read_sysreg(ifsr32_el2);
 
 	if (has_vhe() || vcpu->arch.flags & KVM_ARM64_DEBUG_DIRTY)
-		sysreg[DBGVCR32_EL2] = read_sysreg(dbgvcr32_el2);
+		__ctx_sys_reg(ctxt, DBGVCR32_EL2) = read_sysreg(dbgvcr32_el2);
 }
 
 void __hyp_text __sysreg32_restore_state(struct kvm_vcpu *vcpu)
 {
-	u64 *spsr, *sysreg;
+	struct kvm_cpu_context *ctxt = &vcpu->arch.ctxt;
+	u64 *spsr;
 
 	if (!vcpu_el1_is_32bit(vcpu))
 		return;
 
 	spsr = vcpu->arch.ctxt.gp_regs.spsr;
-	sysreg = vcpu->arch.ctxt.sys_regs;
 
 	write_sysreg(spsr[KVM_SPSR_ABT], spsr_abt);
 	write_sysreg(spsr[KVM_SPSR_UND], spsr_und);
 	write_sysreg(spsr[KVM_SPSR_IRQ], spsr_irq);
 	write_sysreg(spsr[KVM_SPSR_FIQ], spsr_fiq);
 
-	write_sysreg(sysreg[DACR32_EL2], dacr32_el2);
-	write_sysreg(sysreg[IFSR32_EL2], ifsr32_el2);
+	write_sysreg(__ctx_sys_reg(ctxt, DACR32_EL2), dacr32_el2);
+	write_sysreg(__ctx_sys_reg(ctxt, IFSR32_EL2), ifsr32_el2);
 
 	if (has_vhe() || vcpu->arch.flags & KVM_ARM64_DEBUG_DIRTY)
-		write_sysreg(sysreg[DBGVCR32_EL2], dbgvcr32_el2);
+		write_sysreg(__ctx_sys_reg(ctxt, DBGVCR32_EL2), dbgvcr32_el2);
 }
 
 /**

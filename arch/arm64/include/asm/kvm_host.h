@@ -303,12 +303,21 @@ static inline bool sysreg_is_el2(int reg)
 #define cp14_DBGWVR0	(DBGWVR0_EL1 * 2)
 #define cp14_DBGDCCINT	(MDCCINT_EL1 * 2)
 
+struct kvm_regs_backend {
+	u64	*sp_el1;
+	u64	*elr_el1;
+	u64	*spsr_el1;
+};
+
 struct kvm_cpu_context {
 	struct kvm_regs	gp_regs;
 	union {
 		u64 sys_regs[NR_SYS_REGS];
 		u32 copro[0];
 	};
+
+	struct kvm_regs_backend reg_backend;
+	u64 *sys_regs_backend[NR_SYS_REGS];
 
 	struct kvm_vcpu *__hyp_running_vcpu;
 };
@@ -471,13 +480,18 @@ struct kvm_vcpu_arch {
 
 #define vcpu_gp_regs(v)		(&(v)->arch.ctxt.gp_regs)
 
+#define __ctx_sp_el1(ctxt)	(*((ctxt)->reg_backend.sp_el1))
+#define __ctx_elr_el1(ctxt)	(*((ctxt)->reg_backend.elr_el1))
+#define __ctx_spsr_el1(ctxt)	(*((ctxt)->reg_backend.spsr_el1))
+#define __ctx_sys_reg(ctxt,r)	(*((ctxt)->sys_regs_backend[(r)]))
+
 /*
  * Only use __vcpu_sys_reg if you know you want the memory backed version of a
  * register, and not the one most recently accessed by a running VCPU.  For
  * example, for userspace access or for system registers that are never context
  * switched, but only emulated.
  */
-#define __vcpu_sys_reg(v,r)	((v)->arch.ctxt.sys_regs[(r)])
+#define __vcpu_sys_reg(v,r)	(__ctx_sys_reg(&(v)->arch.ctxt, (r)))
 
 u64 vcpu_read_sys_reg(const struct kvm_vcpu *vcpu, int reg);
 void vcpu_write_sys_reg(struct kvm_vcpu *vcpu, u64 val, int reg);
@@ -582,7 +596,7 @@ static inline void kvm_init_host_cpu_context(struct kvm_cpu_context *cpu_ctxt,
 					     int cpu)
 {
 	/* The host's MPIDR is immutable, so let's set it up at boot time */
-	cpu_ctxt->sys_regs[MPIDR_EL1] = cpu_logical_map(cpu);
+	__ctx_sys_reg(cpu_ctxt, MPIDR_EL1) = cpu_logical_map(cpu);
 }
 
 void __kvm_enable_ssbs(void);
@@ -633,6 +647,18 @@ static inline bool kvm_arch_requires_vhe(void)
 		return true;
 
 	return false;
+}
+
+static inline void kvm_sysregs_vcpu_init_default(struct kvm_cpu_context *ctxt)
+{
+	int i;
+
+	for (i = 0; i < NR_SYS_REGS; i++)
+		ctxt->sys_regs_backend[i] = &ctxt->sys_regs[i];
+
+	ctxt->reg_backend.sp_el1 = &ctxt->gp_regs.sp_el1;
+	ctxt->reg_backend.elr_el1 = &ctxt->gp_regs.elr_el1;
+	ctxt->reg_backend.spsr_el1 = &ctxt->gp_regs.spsr[KVM_SPSR_EL1];
 }
 
 void kvm_arm_vcpu_ptrauth_trap(struct kvm_vcpu *vcpu);

@@ -206,6 +206,15 @@ static int set_core_reg(struct kvm_vcpu *vcpu, const struct kvm_one_reg *reg)
 		}
 	}
 
+	if (off == KVM_REG_ARM_CORE_REG(sp_el1))
+		__ctx_sp_el1(&vcpu->arch.ctxt) = *(u64 *)valp;
+
+	if (off == KVM_REG_ARM_CORE_REG(elr_el1))
+		__ctx_elr_el1(&vcpu->arch.ctxt) = *(u64 *)valp;
+
+	if (off == KVM_REG_ARM_CORE_REG(spsr[KVM_SPSR_EL1]))
+		__ctx_spsr_el1(&vcpu->arch.ctxt) = *(u64 *)valp;
+
 	memcpy((u32 *)regs + off, valp, KVM_REG_SIZE(reg->id));
 out:
 	return err;

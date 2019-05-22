@@ -161,6 +161,9 @@ static inline void kvm_init_host_cpu_context(struct kvm_cpu_context *cpu_ctxt,
 	cpu_ctxt->cp15[c0_MPIDR] = cpu_logical_map(cpu);
 }
 
+static inline void kvm_sysregs_vcpu_init_default(struct kvm_cpu_context *ctxt)
+{}
+
 struct vcpu_reset_state {
 	unsigned long	pc;
 	unsigned long	r0;

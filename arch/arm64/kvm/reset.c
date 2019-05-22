@@ -318,6 +318,9 @@ int kvm_reset_vcpu(struct kvm_vcpu *vcpu)
 
 	/* Reset core registers */
 	memcpy(vcpu_gp_regs(vcpu), cpu_reset, sizeof(*cpu_reset));
+	__ctx_sp_el1(&vcpu->arch.ctxt) = 0;
+	__ctx_elr_el1(&vcpu->arch.ctxt) = 0;
+	__ctx_spsr_el1(&vcpu->arch.ctxt) = 0;
 
 	/* Reset system registers */
 	kvm_reset_sys_regs(vcpu);

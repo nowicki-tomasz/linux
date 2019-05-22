@@ -610,7 +610,8 @@ static bool access_gic_sre(struct kvm_vcpu *vcpu,
 		p->regval = (ICC_SRE_EL2_ENABLE | ICC_SRE_EL2_SRE |
 			     ICC_SRE_EL1_DIB | ICC_SRE_EL1_DFB);
 	} else {		/* ICC_SRE_EL1 */
-		p->regval = vcpu->arch.vgic_cpu.vgic_v3.vgic_sre;
+		p->regval = __vgic_v3_reg(&vcpu->arch.vgic_cpu.vgic_v3,
+					  VGIC_REG_SRE);
 	}
 
 	return true;
@@ -1774,9 +1775,9 @@ static bool access_sp_el1(struct kvm_vcpu *vcpu,
 {
 	/* SP_EL1 is NOT maintained in sys_regs array */
 	if (p->is_write)
-		vcpu->arch.ctxt.gp_regs.sp_el1 = p->regval;
+		__ctx_sp_el1(&vcpu->arch.ctxt) = p->regval;
 	else
-		p->regval = vcpu->arch.ctxt.gp_regs.sp_el1;
+		p->regval = __ctx_sp_el1(&vcpu->arch.ctxt);
 
 	return true;
 }
@@ -1808,9 +1809,9 @@ static bool access_elr(struct kvm_vcpu *vcpu,
 		return false;
 
 	if (p->is_write)
-		vcpu->arch.ctxt.gp_regs.elr_el1 = p->regval;
+		__ctx_elr_el1(&vcpu->arch.ctxt) = p->regval;
 	else
-		p->regval = vcpu->arch.ctxt.gp_regs.elr_el1;
+		p->regval = __ctx_elr_el1(&vcpu->arch.ctxt);
 
 	return true;
 }
@@ -1826,9 +1827,9 @@ static bool access_spsr(struct kvm_vcpu *vcpu,
 		return false;
 
 	if (p->is_write)
-		vcpu->arch.ctxt.gp_regs.spsr[KVM_SPSR_EL1] = p->regval;
+		__ctx_spsr_el1(&vcpu->arch.ctxt) = p->regval;
 	else
-		p->regval = vcpu->arch.ctxt.gp_regs.spsr[KVM_SPSR_EL1];
+		p->regval = __ctx_spsr_el1(&vcpu->arch.ctxt);
 
 	return true;
 }
@@ -1919,18 +1920,19 @@ static bool access_gic_apr(struct kvm_vcpu *vcpu,
 			   const struct sys_reg_desc *r)
 {
 	struct vgic_v3_cpu_if *cpu_if = &vcpu->arch.vgic_cpu.nested_vgic_v3;
-	u32 index, *base;
+	u32 index;
+	u64 *base;
 
 	index = r->Op2;
 	if (r->CRm == 8)
-		base = cpu_if->vgic_ap0r;
+		base = __vgic_v3_reg_addr(cpu_if, VGIC_REG_AP0R0 + index);
 	else
-		base = cpu_if->vgic_ap1r;
+		base = __vgic_v3_reg_addr(cpu_if, VGIC_REG_AP1R0 + index);
 
 	if (p->is_write)
-		base[index] = p->regval;
+		*base = p->regval;
 	else
-		p->regval = base[index];
+		p->regval = *base;
 
 	return true;
 }
@@ -1942,9 +1944,9 @@ static bool access_gic_hcr(struct kvm_vcpu *vcpu,
 	struct vgic_v3_cpu_if *cpu_if = &vcpu->arch.vgic_cpu.nested_vgic_v3;
 
 	if (p->is_write)
-		cpu_if->vgic_hcr = p->regval;
+		__vgic_v3_reg(cpu_if, VGIC_REG_HCR) = p->regval;
 	else
-		p->regval = cpu_if->vgic_hcr;
+		p->regval = __vgic_v3_reg(cpu_if, VGIC_REG_HCR);
 
 	return true;
 }
@@ -2004,9 +2006,9 @@ static bool access_gic_vmcr(struct kvm_vcpu *vcpu,
 	struct vgic_v3_cpu_if *cpu_if = &vcpu->arch.vgic_cpu.nested_vgic_v3;
 
 	if (p->is_write)
-		cpu_if->vgic_vmcr = p->regval;
+		__vgic_v3_reg(cpu_if, VGIC_REG_VMCR) = p->regval;
 	else
-		p->regval = cpu_if->vgic_vmcr;
+		p->regval = __vgic_v3_reg(cpu_if, VGIC_REG_VMCR);
 
 	return true;
 }
@@ -2023,9 +2025,9 @@ static bool access_gic_lr(struct kvm_vcpu *vcpu,
 		index += 8;
 
 	if (p->is_write)
-		cpu_if->vgic_lr[index] = p->regval;
+		__vgic_v3_reg_lr(cpu_if, index) = p->regval;
 	else
-		p->regval = cpu_if->vgic_lr[index];
+		p->regval = __vgic_v3_reg_lr(cpu_if, index);
 
 	return true;
 }
@@ -4028,7 +4030,8 @@ void kvm_reset_sys_regs(struct kvm_vcpu *vcpu)
 	const struct sys_reg_desc *table;
 
 	/* Catch someone adding a register without putting in reset entry. */
-	memset(&vcpu->arch.ctxt.sys_regs, 0x42, sizeof(vcpu->arch.ctxt.sys_regs));
+	for (num = 1; num < NR_SYS_REGS; num++)
+		__vcpu_sys_reg(vcpu, num) = 0x4242424242424242;
 
 	/* Generic chip reset first (so target could override). */
 	reset_sys_reg_descs(vcpu, sys_reg_descs, ARRAY_SIZE(sys_reg_descs));
