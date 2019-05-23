@@ -32,7 +32,7 @@ void vgic_v3_set_underflow(struct kvm_vcpu *vcpu)
 {
 	struct vgic_v3_cpu_if *cpuif = &vcpu->arch.vgic_cpu.vgic_v3;
 
-	cpuif->vgic_hcr |= ICH_HCR_UIE;
+	__vgic_v3_reg(cpuif, VGIC_REG_HCR) |= ICH_HCR_UIE;
 }
 
 static bool lr_signals_eoi_mi(u64 lr_val)
@@ -50,10 +50,10 @@ void vgic_v3_fold_lr_state(struct kvm_vcpu *vcpu)
 
 	DEBUG_SPINLOCK_BUG_ON(!irqs_disabled());
 
-	cpuif->vgic_hcr &= ~ICH_HCR_UIE;
+	__vgic_v3_reg(cpuif, VGIC_REG_HCR) &= ~ICH_HCR_UIE;
 
 	for (lr = 0; lr < cpuif->used_lrs; lr++) {
-		u64 val = cpuif->vgic_lr[lr];
+		u64 val = __vgic_v3_reg_lr(cpuif, lr);
 		u32 intid, cpuid;
 		struct vgic_irq *irq;
 		bool is_v2_sgi = false;
@@ -204,12 +204,12 @@ void vgic_v3_populate_lr(struct kvm_vcpu *vcpu, struct vgic_irq *irq, int lr)
 
 	val |= (u64)irq->priority << ICH_LR_PRIORITY_SHIFT;
 
-	vcpu->arch.vgic_cpu.vgic_v3.vgic_lr[lr] = val;
+	__vgic_v3_reg_lr(&vcpu->arch.vgic_cpu.vgic_v3, lr) = val;
 }
 
 void vgic_v3_clear_lr(struct kvm_vcpu *vcpu, int lr)
 {
-	vcpu->arch.vgic_cpu.vgic_v3.vgic_lr[lr] = 0;
+	__vgic_v3_reg_lr(&vcpu->arch.vgic_cpu.vgic_v3, lr) = 0;
 }
 
 void vgic_v3_set_vmcr(struct kvm_vcpu *vcpu, struct vgic_vmcr *vmcrp)
@@ -239,7 +239,7 @@ void vgic_v3_set_vmcr(struct kvm_vcpu *vcpu, struct vgic_vmcr *vmcrp)
 	vmcr |= (vmcrp->grpen0 << ICH_VMCR_ENG0_SHIFT) & ICH_VMCR_ENG0_MASK;
 	vmcr |= (vmcrp->grpen1 << ICH_VMCR_ENG1_SHIFT) & ICH_VMCR_ENG1_MASK;
 
-	cpu_if->vgic_vmcr = vmcr;
+	__vgic_v3_reg(cpu_if, VGIC_REG_VMCR) = vmcr;
 }
 
 void vgic_v3_get_vmcr(struct kvm_vcpu *vcpu, struct vgic_vmcr *vmcrp)
@@ -248,7 +248,7 @@ void vgic_v3_get_vmcr(struct kvm_vcpu *vcpu, struct vgic_vmcr *vmcrp)
 	u32 model = vcpu->kvm->arch.vgic.vgic_model;
 	u32 vmcr;
 
-	vmcr = cpu_if->vgic_vmcr;
+	vmcr = __vgic_v3_reg(cpu_if, VGIC_REG_VMCR);
 
 	if (model == KVM_DEV_TYPE_ARM_VGIC_V2) {
 		vmcrp->ackctl = (vmcr & ICH_VMCR_ACK_CTL_MASK) >>
@@ -287,7 +287,7 @@ void vgic_v3_enable(struct kvm_vcpu *vcpu)
 	 * points to their reset values. Anything else resets to zero
 	 * anyway.
 	 */
-	vgic_v3->vgic_vmcr = 0;
+	__vgic_v3_reg(vgic_v3, VGIC_REG_VMCR) = 0;
 
 	/*
 	 * If we are emulating a GICv3, we do it in an non-GICv2-compatible
@@ -296,7 +296,7 @@ void vgic_v3_enable(struct kvm_vcpu *vcpu)
 	 * This goes with the spec allowing the value to be RAO/WI.
 	 */
 	if (vcpu->kvm->arch.vgic.vgic_model == KVM_DEV_TYPE_ARM_VGIC_V3) {
-		vgic_v3->vgic_sre = (ICC_SRE_EL1_DIB |
+		__vgic_v3_reg(vgic_v3, VGIC_REG_SRE) = (ICC_SRE_EL1_DIB |
 				     ICC_SRE_EL1_DFB |
 				     ICC_SRE_EL1_SRE);
 		/*
@@ -304,10 +304,12 @@ void vgic_v3_enable(struct kvm_vcpu *vcpu)
 		 * guests as well.
 		 */
 		if (nested_virt_in_use(vcpu))
-			vcpu->arch.vgic_cpu.nested_vgic_v3.vgic_sre = vgic_v3->vgic_sre;
+			__vgic_v3_reg(&vcpu->arch.vgic_cpu.nested_vgic_v3,
+				      VGIC_REG_SRE) =
+					__vgic_v3_reg(vgic_v3, VGIC_REG_SRE);
 		vcpu->arch.vgic_cpu.pendbaser = INITIAL_PENDBASER_VALUE;
 	} else {
-		vgic_v3->vgic_sre = 0;
+		__vgic_v3_reg(vgic_v3, VGIC_REG_SRE) = 0;
 	}
 
 	vcpu->arch.vgic_cpu.num_id_bits = (kvm_vgic_global_state.ich_vtr_el2 &
@@ -318,13 +320,13 @@ void vgic_v3_enable(struct kvm_vcpu *vcpu)
 					    ICH_VTR_PRI_BITS_SHIFT) + 1;
 
 	/* Get the show on the road... */
-	vgic_v3->vgic_hcr = ICH_HCR_EN;
+	__vgic_v3_reg(vgic_v3, VGIC_REG_HCR) = ICH_HCR_EN;
 	if (group0_trap)
-		vgic_v3->vgic_hcr |= ICH_HCR_TALL0;
+		__vgic_v3_reg(vgic_v3, VGIC_REG_HCR) |= ICH_HCR_TALL0;
 	if (group1_trap)
-		vgic_v3->vgic_hcr |= ICH_HCR_TALL1;
+		__vgic_v3_reg(vgic_v3, VGIC_REG_HCR) |= ICH_HCR_TALL1;
 	if (common_trap)
-		vgic_v3->vgic_hcr |= ICH_HCR_TC;
+		__vgic_v3_reg(vgic_v3, VGIC_REG_HCR) |= ICH_HCR_TC;
 }
 
 int vgic_v3_lpi_sync_pending_status(struct kvm *kvm, struct vgic_irq *irq)
@@ -679,8 +681,9 @@ void vgic_v3_load(struct kvm_vcpu *vcpu)
 	 * is dependent on ICC_SRE_EL1.SRE, and we have to perform the
 	 * VMCR_EL2 save/restore in the world switch.
 	 */
-	if (likely(cpu_if->vgic_sre))
-		kvm_call_hyp(__vgic_v3_write_vmcr, cpu_if->vgic_vmcr);
+	if (likely(__vgic_v3_reg(cpu_if, VGIC_REG_SRE)))
+		kvm_call_hyp(__vgic_v3_write_vmcr,
+			     __vgic_v3_reg(cpu_if, VGIC_REG_VMCR));
 
 	kvm_call_hyp(__vgic_v3_restore_aprs, kern_hyp_va(cpu_if));
 
@@ -698,8 +701,8 @@ void vgic_v3_put(struct kvm_vcpu *vcpu)
 	if (vgic_state_is_nested(vcpu))
 		cpu_if = &vcpu->arch.vgic_cpu.shadow_vgic_v3;
 
-	if (likely(cpu_if->vgic_sre))
-		cpu_if->vgic_vmcr = kvm_call_hyp_ret(__vgic_v3_read_vmcr);
+	if (likely(__vgic_v3_reg(cpu_if, VGIC_REG_SRE)))
+		__vgic_v3_reg(cpu_if, VGIC_REG_VMCR) = kvm_call_hyp_ret(__vgic_v3_read_vmcr);
 
 	kvm_call_hyp(__vgic_v3_save_aprs, kern_hyp_va(cpu_if));
 

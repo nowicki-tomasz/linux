@@ -188,6 +188,14 @@ static int kvm_vgic_dist_init(struct kvm *kvm, unsigned int nr_spis)
 	return 0;
 }
 
+static void vgic__init_reg_backend(struct vgic_v3_cpu_if *vgic)
+{
+	unsigned int i;
+
+	for (i = 0; i < NR_VGIC_REGS; i++)
+		vgic->regs_backend[i] = &vgic->regs[i];
+}
+
 /**
  * kvm_vgic_vcpu_init() - Initialize static VGIC VCPU data
  * structures and register VCPU-specific KVM iodevs
@@ -203,6 +211,10 @@ int kvm_vgic_vcpu_init(struct kvm_vcpu *vcpu)
 	struct vgic_dist *dist = &vcpu->kvm->arch.vgic;
 	int ret = 0;
 	int i;
+
+	vgic__init_reg_backend(&vcpu->arch.vgic_cpu.vgic_v3);
+	vgic__init_reg_backend(&vcpu->arch.vgic_cpu.nested_vgic_v3);
+	vgic__init_reg_backend(&vcpu->arch.vgic_cpu.shadow_vgic_v3);
 
 	vgic_cpu->rd_iodev.base_addr = VGIC_ADDR_UNDEF;
 	vgic_cpu->sgi_iodev.base_addr = VGIC_ADDR_UNDEF;

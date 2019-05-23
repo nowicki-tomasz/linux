@@ -369,7 +369,7 @@ static unsigned long vgic_mmio_read_apr(struct kvm_vcpu *vcpu,
 		n = array_index_nospec(n, 4);
 
 		/* GICv3 only uses ICH_AP1Rn for memory mapped (GICv2) guests */
-		return vgicv3->vgic_ap1r[n];
+		return __vgic_v3_reg(vgicv3, VGIC_REG_AP1R0 + n);
 	}
 }
 
@@ -395,7 +395,7 @@ static void vgic_mmio_write_apr(struct kvm_vcpu *vcpu,
 		n = array_index_nospec(n, 4);
 
 		/* GICv3 only uses ICH_AP1Rn for memory mapped (GICv2) guests */
-		vgicv3->vgic_ap1r[n] = val;
+		__vgic_v3_reg(vgicv3, VGIC_REG_AP1R0 + n) = val;
 	}
 }
 

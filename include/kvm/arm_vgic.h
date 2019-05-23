@@ -285,13 +285,42 @@ struct vgic_v2_cpu_if {
 	unsigned int used_lrs;
 };
 
+enum kvm_vgic_v3_regs {
+	VGIC_REG_HCR,
+	VGIC_REG_VMCR,
+	VGIC_REG_SRE,
+	VGIC_REG_AP0R0,
+	VGIC_REG_AP0R1,
+	VGIC_REG_AP0R2,
+	VGIC_REG_AP0R3,
+	VGIC_REG_AP1R0,
+	VGIC_REG_AP1R1,
+	VGIC_REG_AP1R2,
+	VGIC_REG_AP1R3,
+	VGIC_REG_LR0,
+	VGIC_REG_LR1,
+	VGIC_REG_LR2,
+	VGIC_REG_LR3,
+	VGIC_REG_LR4,
+	VGIC_REG_LR5,
+	VGIC_REG_LR6,
+	VGIC_REG_LR7,
+	VGIC_REG_LR8,
+	VGIC_REG_LR9,
+	VGIC_REG_LR10,
+	VGIC_REG_LR11,
+	VGIC_REG_LR12,
+	VGIC_REG_LR13,
+	VGIC_REG_LR14,
+	VGIC_REG_LR15,
+	NR_VGIC_REGS	/* Nothing after this line! */
+};
+
 struct vgic_v3_cpu_if {
-	u32		vgic_hcr;
-	u32		vgic_vmcr;
-	u32		vgic_sre;	/* Restored only, change ignored */
-	u32		vgic_ap0r[4];
-	u32		vgic_ap1r[4];
-	u64		vgic_lr[VGIC_V3_MAX_LRS];
+	u64	regs[NR_VGIC_REGS];
+
+	/* For NEVE register access redirection purpose */
+	u64	*regs_backend[NR_VGIC_REGS];
 
 	/*
 	 * GICv4 ITS per-VPE data, containing the doorbell IRQ, the
@@ -303,6 +332,12 @@ struct vgic_v3_cpu_if {
 
 	unsigned int used_lrs;
 };
+
+#define __vgic_v3_reg_addr(v, r)	((v)->regs_backend[(r)])
+#define __vgic_v3_reg(v, r)		(*__vgic_v3_reg_addr((v), (r)))
+
+#define __vgic_v3_reg_lr(v, idx)	\
+		(*__vgic_v3_reg_addr((v), (VGIC_REG_LR0 + (idx))))
 
 struct vgic_cpu {
 	/* CPU vif control registers for world switch */

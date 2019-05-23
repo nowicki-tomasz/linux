@@ -215,7 +215,7 @@ void __hyp_text __vgic_v3_save_state(struct vgic_v3_cpu_if *cpu_if)
 	 * LRs, and when reading back the VMCR on non-VHE systems.
 	 */
 	if (used_lrs || !has_vhe()) {
-		if (!cpu_if->vgic_sre) {
+		if (!__vgic_v3_reg(cpu_if, VGIC_REG_SRE)) {
 			dsb(sy);
 			isb();
 		}
@@ -227,13 +227,15 @@ void __hyp_text __vgic_v3_save_state(struct vgic_v3_cpu_if *cpu_if)
 
 		elrsr = read_gicreg(ICH_ELRSR_EL2);
 
-		write_gicreg(cpu_if->vgic_hcr & ~ICH_HCR_EN, ICH_HCR_EL2);
+		write_gicreg(__vgic_v3_reg(cpu_if, VGIC_REG_HCR) &
+						~ICH_HCR_EN, ICH_HCR_EL2);
 
 		for (i = 0; i < used_lrs; i++) {
 			if (elrsr & (1 << i))
-				cpu_if->vgic_lr[i] &= ~ICH_LR_STATE;
+				__vgic_v3_reg_lr(cpu_if, i) &= ~ICH_LR_STATE;
 			else
-				cpu_if->vgic_lr[i] = __gic_v3_get_lr(i);
+				__vgic_v3_reg_lr(cpu_if, i) =
+							__gic_v3_get_lr(i);
 
 			__gic_v3_set_lr(0, i);
 		}
@@ -246,10 +248,10 @@ void __hyp_text __vgic_v3_restore_state(struct vgic_v3_cpu_if *cpu_if)
 	int i;
 
 	if (used_lrs || cpu_if->its_vpe.its_vm) {
-		write_gicreg(cpu_if->vgic_hcr, ICH_HCR_EL2);
+		write_gicreg(__vgic_v3_reg(cpu_if, VGIC_REG_HCR), ICH_HCR_EL2);
 
 		for (i = 0; i < used_lrs; i++)
-			__gic_v3_set_lr(cpu_if->vgic_lr[i], i);
+			__gic_v3_set_lr(__vgic_v3_reg_lr(cpu_if, i), i);
 	}
 
 	/*
@@ -259,7 +261,7 @@ void __hyp_text __vgic_v3_restore_state(struct vgic_v3_cpu_if *cpu_if)
 	 * correct values from the memory-mapped interface.
 	 */
 	if (used_lrs || !has_vhe()) {
-		if (!cpu_if->vgic_sre) {
+		if (!__vgic_v3_reg(cpu_if, VGIC_REG_SRE)) {
 			isb();
 			dsb(sy);
 		}
@@ -278,10 +280,11 @@ void __hyp_text __vgic_v3_activate_traps(struct vgic_v3_cpu_if *cpu_if)
 	 * particular.  This logic must be called before
 	 * __vgic_v3_restore_state().
 	 */
-	if (!cpu_if->vgic_sre) {
+	if (!__vgic_v3_reg(cpu_if, VGIC_REG_SRE)) {
 		write_gicreg(0, ICC_SRE_EL1);
 		isb();
-		write_gicreg(cpu_if->vgic_vmcr, ICH_VMCR_EL2);
+		write_gicreg(__vgic_v3_reg(cpu_if, VGIC_REG_VMCR),
+			     ICH_VMCR_EL2);
 
 
 		if (has_vhe()) {
@@ -310,21 +313,22 @@ void __hyp_text __vgic_v3_activate_traps(struct vgic_v3_cpu_if *cpu_if)
 	 */
 	if (static_branch_unlikely(&vgic_v3_cpuif_trap) ||
 	    cpu_if->its_vpe.its_vm)
-		write_gicreg(cpu_if->vgic_hcr, ICH_HCR_EL2);
+		write_gicreg(__vgic_v3_reg(cpu_if, VGIC_REG_HCR), ICH_HCR_EL2);
 }
 
 void __hyp_text __vgic_v3_deactivate_traps(struct vgic_v3_cpu_if *cpu_if)
 {
 	u64 val;
 
-	if (!cpu_if->vgic_sre) {
-		cpu_if->vgic_vmcr = read_gicreg(ICH_VMCR_EL2);
+	if (!__vgic_v3_reg(cpu_if, VGIC_REG_SRE)) {
+		__vgic_v3_reg(cpu_if, VGIC_REG_VMCR) =
+						read_gicreg(ICH_VMCR_EL2);
 	}
 
 	val = read_gicreg(ICC_SRE_EL2);
 	write_gicreg(val | ICC_SRE_EL2_ENABLE, ICC_SRE_EL2);
 
-	if (!cpu_if->vgic_sre) {
+	if (!__vgic_v3_reg(cpu_if, VGIC_REG_SRE)) {
 		/* Make sure ENABLE is set at EL2 before setting SRE at EL1 */
 		isb();
 		write_gicreg(1, ICC_SRE_EL1);
@@ -349,22 +353,22 @@ void __hyp_text __vgic_v3_save_aprs(struct vgic_v3_cpu_if *cpu_if)
 
 	switch (nr_pre_bits) {
 	case 7:
-		cpu_if->vgic_ap0r[3] = __vgic_v3_read_ap0rn(3);
-		cpu_if->vgic_ap0r[2] = __vgic_v3_read_ap0rn(2);
+		__vgic_v3_reg(cpu_if, VGIC_REG_AP0R3) = __vgic_v3_read_ap0rn(3);
+		__vgic_v3_reg(cpu_if, VGIC_REG_AP0R2) =	__vgic_v3_read_ap0rn(2);
 	case 6:
-		cpu_if->vgic_ap0r[1] = __vgic_v3_read_ap0rn(1);
+		__vgic_v3_reg(cpu_if, VGIC_REG_AP0R1) =	__vgic_v3_read_ap0rn(1);
 	default:
-		cpu_if->vgic_ap0r[0] = __vgic_v3_read_ap0rn(0);
+		__vgic_v3_reg(cpu_if, VGIC_REG_AP0R0) = __vgic_v3_read_ap0rn(0);
 	}
 
 	switch (nr_pre_bits) {
 	case 7:
-		cpu_if->vgic_ap1r[3] = __vgic_v3_read_ap1rn(3);
-		cpu_if->vgic_ap1r[2] = __vgic_v3_read_ap1rn(2);
+		__vgic_v3_reg(cpu_if, VGIC_REG_AP1R3) = __vgic_v3_read_ap1rn(3);
+		__vgic_v3_reg(cpu_if, VGIC_REG_AP1R2) = __vgic_v3_read_ap1rn(2);
 	case 6:
-		cpu_if->vgic_ap1r[1] = __vgic_v3_read_ap1rn(1);
+		__vgic_v3_reg(cpu_if, VGIC_REG_AP1R1) = __vgic_v3_read_ap1rn(1);
 	default:
-		cpu_if->vgic_ap1r[0] = __vgic_v3_read_ap1rn(0);
+		__vgic_v3_reg(cpu_if, VGIC_REG_AP1R0) = __vgic_v3_read_ap1rn(0);
 	}
 }
 
@@ -378,22 +382,22 @@ void __hyp_text __vgic_v3_restore_aprs(struct vgic_v3_cpu_if *cpu_if)
 
 	switch (nr_pre_bits) {
 	case 7:
-		__vgic_v3_write_ap0rn(cpu_if->vgic_ap0r[3], 3);
-		__vgic_v3_write_ap0rn(cpu_if->vgic_ap0r[2], 2);
+		__vgic_v3_write_ap0rn(__vgic_v3_reg(cpu_if, VGIC_REG_AP0R3), 3);
+		__vgic_v3_write_ap0rn(__vgic_v3_reg(cpu_if, VGIC_REG_AP0R2), 2);
 	case 6:
-		__vgic_v3_write_ap0rn(cpu_if->vgic_ap0r[1], 1);
+		__vgic_v3_write_ap0rn(__vgic_v3_reg(cpu_if, VGIC_REG_AP0R1), 1);
 	default:
-		__vgic_v3_write_ap0rn(cpu_if->vgic_ap0r[0], 0);
+		__vgic_v3_write_ap0rn(__vgic_v3_reg(cpu_if, VGIC_REG_AP0R0), 0);
 	}
 
 	switch (nr_pre_bits) {
 	case 7:
-		__vgic_v3_write_ap1rn(cpu_if->vgic_ap1r[3], 3);
-		__vgic_v3_write_ap1rn(cpu_if->vgic_ap1r[2], 2);
+		__vgic_v3_write_ap1rn(__vgic_v3_reg(cpu_if, VGIC_REG_AP1R3), 3);
+		__vgic_v3_write_ap1rn(__vgic_v3_reg(cpu_if, VGIC_REG_AP1R2), 2);
 	case 6:
-		__vgic_v3_write_ap1rn(cpu_if->vgic_ap1r[1], 1);
+		__vgic_v3_write_ap1rn(__vgic_v3_reg(cpu_if, VGIC_REG_AP1R1), 1);
 	default:
-		__vgic_v3_write_ap1rn(cpu_if->vgic_ap1r[0], 0);
+		__vgic_v3_write_ap1rn(__vgic_v3_reg(cpu_if, VGIC_REG_AP1R0), 0);
 	}
 }
 

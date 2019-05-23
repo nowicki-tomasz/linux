@@ -184,12 +184,12 @@ static void vgic_v3_access_apr_reg(struct kvm_vcpu *vcpu,
 				   struct sys_reg_params *p, u8 apr, u8 idx)
 {
 	struct vgic_v3_cpu_if *vgicv3 = &vcpu->arch.vgic_cpu.vgic_v3;
-	uint32_t *ap_reg;
+	uint64_t *ap_reg;
 
 	if (apr)
-		ap_reg = &vgicv3->vgic_ap1r[idx];
+		ap_reg = __vgic_v3_reg_addr(vgicv3, VGIC_REG_AP1R0 + idx);
 	else
-		ap_reg = &vgicv3->vgic_ap0r[idx];
+		ap_reg = __vgic_v3_reg_addr(vgicv3, VGIC_REG_AP0R0 + idx);
 
 	if (p->is_write)
 		*ap_reg = p->regval;
@@ -237,7 +237,7 @@ static bool access_gic_sre(struct kvm_vcpu *vcpu, struct sys_reg_params *p,
 		if (!(p->regval & ICC_SRE_EL1_SRE))
 			return false;
 	} else {
-		p->regval = vgicv3->vgic_sre;
+		p->regval = __vgic_v3_reg(vgicv3, VGIC_REG_SRE);
 	}
 
 	return true;
