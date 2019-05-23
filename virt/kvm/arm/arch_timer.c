@@ -767,6 +767,58 @@ static void update_vtimer_cntvoff(struct kvm_vcpu *vcpu, u64 cntvoff)
 	mutex_unlock(&kvm->lock);
 }
 
+static const u64 neve_regs_map[NR_KVM_TIMERS][NR_TIMER_REGS] = {
+		[0 ... NR_KVM_TIMERS - 1][0 ... NR_TIMER_REGS - 1] = 0,
+		[TIMER_VTIMER][TIMER_REG_CTL] = VNCR_CNTV_CTL_EL02,
+		[TIMER_VTIMER][TIMER_REG_CVAL] = VNCR_CNTV_CVAL_EL02,
+		[TIMER_VTIMER][TIMER_REG_VOFF] = VNCR_CNTVOFF_EL2,
+		[TIMER_PTIMER][TIMER_REG_CTL] = VNCR_CNTP_CTL_EL02,
+		[TIMER_PTIMER][TIMER_REG_CVAL] = VNCR_CNTP_CVAL_EL02,
+};
+
+static void kvm_timer_init_reg_backend(struct kvm_vcpu *vcpu,
+				struct arch_timer_context *timer)
+{
+	enum kvm_arch_timers index = arch_timer_ctx_index(timer);
+	u64 regs[NR_TIMER_REGS];
+	unsigned int i;
+
+	if (!nested_virt_in_use(vcpu) ||
+	    !cpus_have_const_cap(ARM64_HAS_NEVE_VIRT))
+		return;
+
+	if (index != TIMER_VTIMER && index != TIMER_PTIMER)
+		return;
+
+	/*
+	 * FIXME: Save registers snapshot and copy in after switching to NEVE
+	 * backend. Do we really need this hack ???
+	 */
+	for (i = 0; i < NR_TIMER_REGS; i++)
+		regs[i] = __timer_reg(timer, i);
+
+	for (i = 0; i < NR_TIMER_REGS; i++) {
+		if (neve_regs_map[index][i] == 0)
+			continue;
+
+		timer->regs_backend[i] = (u64 *)((uintptr_t)vcpu->arch.vncr_el2 +
+						 neve_regs_map[index][i]);
+	}
+
+	/* FIXME: Restore */
+	for (i = 0; i < NR_TIMER_REGS; i++)
+		__timer_reg(timer, i) = regs[i];
+}
+
+void kvm_timer_vcpu_init_backend(struct kvm_vcpu *vcpu)
+{
+	int i;
+
+	for (i = 0; i < NR_KVM_TIMERS; i++)
+		kvm_timer_init_reg_backend(vcpu,
+					   &vcpu->arch.timer_cpu.timers[i]);
+}
+
 static void __init_reg_backend_default(struct arch_timer_context *timer)
 {
 	unsigned int i;
