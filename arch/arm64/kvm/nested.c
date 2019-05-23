@@ -32,6 +32,78 @@ void kvm_init_nested(struct kvm *kvm)
 	kvm->arch.nested_mmus_size = 0;
 }
 
+static const u64 neve_regs_map[] = {
+		[0 ... NR_SYS_REGS] = 0,
+		[VTTBR_EL2] = VNCR_VTTBR_EL2,
+		[VTCR_EL2] = VNCR_VTCR_EL2,
+		[VMPIDR_EL2] = VNCR_VMPIDR_EL2,
+		[HCR_EL2] = VNCR_HCR_EL2,
+		[HSTR_EL2] = VNCR_HSTR_EL2,
+		[VPIDR_EL2] = VNCR_VPIDR_EL2,
+		[TPIDR_EL2] = VNCR_TPIDR_EL2,
+		[CPACR_EL1] = VNCR_CPACR_EL12,
+		[VBAR_EL1] = VNCR_VBAR_EL12,
+		[SCTLR_EL1] = VNCR_SCTLR_EL12,
+		[CONTEXTIDR_EL1] = VNCR_CONTEXTIDR_EL12,
+		[TCR_EL1] = VNCR_TCR_EL12,
+		[AFSR0_EL1] = VNCR_AFSR0_EL12,
+		[AFSR1_EL1] = VNCR_AFSR1_EL12,
+		[ESR_EL1] = VNCR_ESR_EL12,
+		[MAIR_EL1] = VNCR_MAIR_EL12,
+		[AMAIR_EL1] = VNCR_AMAIR_EL12,
+		[TTBR0_EL1] = VNCR_TTBR0_EL12,
+		[TTBR1_EL1] = VNCR_TTBR1_EL12,
+		[FAR_EL1] = VNCR_FAR_EL12,
+		[ACTLR_EL1] = VNCR_ACTLR_EL1,
+};
+
+static void kvm_sysregs_vcpu_init_neve(struct kvm_vcpu *vcpu)
+{
+	struct kvm_cpu_context *ctxt = &vcpu->arch.ctxt;
+	u64 regs[NR_SYS_REGS];
+	u64 reg_core;
+	int i;
+
+	if (!nested_virt_in_use(vcpu) ||
+	    !cpus_have_const_cap(ARM64_HAS_NEVE_VIRT))
+		return;
+
+	/*
+	 * FIXME: Save registers snapshot and copy in after switching to NEVE
+	 * backend. Do we really need this hack ???
+	 */
+	for (i = 0; i < NR_SYS_REGS; i++)
+		regs[i] = __vcpu_sys_reg(vcpu, i);
+
+	for (i = 0; i < NR_SYS_REGS; i++) {
+		if (neve_regs_map[i] == 0)
+			continue;
+
+		ctxt->sys_regs_backend[i] =
+				(u64 *)((uintptr_t)vcpu->arch.vncr_el2 +
+					neve_regs_map[i]);
+	}
+
+	/* FIXME: Restore */
+	for (i = 0; i < NR_SYS_REGS; i++)
+		__vcpu_sys_reg(vcpu, i) = regs[i];
+
+	reg_core = __ctx_sp_el1(ctxt);
+	ctxt->reg_backend.sp_el1 =
+			(u64 *)((uintptr_t)vcpu->arch.vncr_el2 + VNCR_SP_EL1);
+	__ctx_sp_el1(ctxt) = reg_core;
+
+	reg_core = __ctx_elr_el1(ctxt);
+	ctxt->reg_backend.elr_el1 =
+			(u64 *)((uintptr_t)vcpu->arch.vncr_el2 + VNCR_ELR_EL12);
+	__ctx_elr_el1(ctxt) = reg_core;
+
+	reg_core = __ctx_spsr_el1(ctxt);
+	ctxt->reg_backend.spsr_el1 =
+			(u64 *)((uintptr_t)vcpu->arch.vncr_el2 + VNCR_SPSR_EL12);
+	__ctx_spsr_el1(ctxt) = reg_core;
+}
+
 #define ARM_VNCR_SIZE SZ_4K
 
 int kvm_neve_init(struct kvm_vcpu *vcpu)
