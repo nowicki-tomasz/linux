@@ -121,6 +121,12 @@ int kvm_neve_init(struct kvm_vcpu *vcpu)
 	if (!vcpu->arch.vncr_el2)
 		return -ENOMEM;
 
+	/* Redirect memory backed registers to VNCR area */
+	kvm_sysregs_vcpu_init_neve(vcpu);
+	kvm_vgic_init_reg_backend(vcpu);
+	kvm_timer_vcpu_init_backend(vcpu);
+
+	kvm_info("NEVE initialized - VNCR@0x%p\n", vcpu->arch.vncr_el2);
 	return 0;
 }
 

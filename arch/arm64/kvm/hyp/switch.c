@@ -177,6 +177,11 @@ static void __hyp_text __activate_traps(struct kvm_vcpu *vcpu)
 			 */
 			if (!vcpu_el2_tge_is_set(vcpu))
 				hcr |= HCR_AT;
+
+			if (cpus_have_const_cap(ARM64_HAS_NEVE_VIRT)) {
+				hcr |= HCR_NV2;
+				write_sysreg_s((u64)vcpu->arch.vncr_el2, SYS_VNCR_EL2);
+			}
 		}
 	}
 
