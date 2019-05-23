@@ -188,6 +188,67 @@ static int kvm_vgic_dist_init(struct kvm *kvm, unsigned int nr_spis)
 	return 0;
 }
 
+static const u64 neve_regs_map[] = {
+		[0 ... NR_VGIC_REGS] = 0,
+		[VGIC_REG_HCR] = VNCR_ICH_HCR_EL2,
+		[VGIC_REG_VMCR] = VNCR_ICH_VMCR_EL2,
+		[VGIC_REG_AP0R0] = VNCR_ICH_AP0R0_EL2,
+		[VGIC_REG_AP0R1] = VNCR_ICH_AP0R1_EL2,
+		[VGIC_REG_AP0R2] = VNCR_ICH_AP0R2_EL2,
+		[VGIC_REG_AP0R3] = VNCR_ICH_AP0R3_EL2,
+		[VGIC_REG_AP1R0] = VNCR_ICH_AP1R0_EL2,
+		[VGIC_REG_AP1R1] = VNCR_ICH_AP1R1_EL2,
+		[VGIC_REG_AP1R2] = VNCR_ICH_AP1R2_EL2,
+		[VGIC_REG_AP1R3] = VNCR_ICH_AP1R3_EL2,
+		[VGIC_REG_LR0] = VNCR_ICH_LR0_EL2,
+		[VGIC_REG_LR1] = VNCR_ICH_LR1_EL2,
+		[VGIC_REG_LR2] = VNCR_ICH_LR2_EL2,
+		[VGIC_REG_LR3] = VNCR_ICH_LR3_EL2,
+		[VGIC_REG_LR4] = VNCR_ICH_LR4_EL2,
+		[VGIC_REG_LR5] = VNCR_ICH_LR5_EL2,
+		[VGIC_REG_LR6] = VNCR_ICH_LR6_EL2,
+		[VGIC_REG_LR7] = VNCR_ICH_LR7_EL2,
+		[VGIC_REG_LR8] = VNCR_ICH_LR8_EL2,
+		[VGIC_REG_LR9] = VNCR_ICH_LR9_EL2,
+		[VGIC_REG_LR10] = VNCR_ICH_LR10_EL2,
+		[VGIC_REG_LR11] = VNCR_ICH_LR11_EL2,
+		[VGIC_REG_LR12] = VNCR_ICH_LR12_EL2,
+		[VGIC_REG_LR13] = VNCR_ICH_LR13_EL2,
+		[VGIC_REG_LR14] = VNCR_ICH_LR14_EL2,
+		[VGIC_REG_LR15] = VNCR_ICH_LR15_EL2,
+};
+
+void kvm_vgic_init_reg_backend(struct kvm_vcpu *vcpu)
+{
+	struct vgic_v3_cpu_if *vgic = &vcpu->arch.vgic_cpu.nested_vgic_v3;
+	u64 regs[NR_VGIC_REGS];
+	unsigned int i;
+
+	if (!nested_virt_in_use(vcpu) ||
+	    !cpus_have_const_cap(ARM64_HAS_NEVE_VIRT))
+		return;
+
+	/*
+	 * FIXME: Save registers snapshot and copy in after switching to NEVE
+	 * backend. Do we really need this hack ???
+	 */
+	for (i = 0; i < NR_VGIC_REGS; i++)
+		regs[i] = __vgic_v3_reg(vgic, i);
+
+
+	for (i = 0; i < NR_VGIC_REGS; i++) {
+		if (neve_regs_map[i] == 0)
+			continue;
+
+		vgic->regs_backend[i] = (u64 *)((uintptr_t)vcpu->arch.vncr_el2 +
+						 neve_regs_map[i]);
+	}
+
+	/* FIXME: Restore */
+	for (i = 0; i < NR_VGIC_REGS; i++)
+		__vgic_v3_reg(vgic, i) = regs[i];
+}
+
 static void vgic__init_reg_backend(struct vgic_v3_cpu_if *vgic)
 {
 	unsigned int i;
