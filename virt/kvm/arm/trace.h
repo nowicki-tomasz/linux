@@ -305,9 +305,9 @@ TRACE_EVENT(kvm_timer_save_state,
 	),
 
 	TP_fast_assign(
-		__entry->ctl			= ctx->cnt_ctl;
-		__entry->cval			= ctx->cnt_cval;
-		__entry->timer_idx		= arch_timer_ctx_index(ctx);
+		__entry->ctl		= *ctx->regs_backend[TIMER_REG_CTL];
+		__entry->cval		= *ctx->regs_backend[TIMER_REG_CVAL];
+		__entry->timer_idx	= arch_timer_ctx_index(ctx);
 	),
 
 	TP_printk("   CTL: %#08lx CVAL: %#16llx arch_timer_ctx_index: %d",
@@ -327,8 +327,8 @@ TRACE_EVENT(kvm_timer_restore_state,
 	),
 
 	TP_fast_assign(
-		__entry->ctl			= ctx->cnt_ctl;
-		__entry->cval			= ctx->cnt_cval;
+		__entry->ctl			= *ctx->regs_backend[TIMER_REG_CTL];
+		__entry->cval			= *ctx->regs_backend[TIMER_REG_CVAL];
 		__entry->timer_idx		= arch_timer_ctx_index(ctx);
 	),
 

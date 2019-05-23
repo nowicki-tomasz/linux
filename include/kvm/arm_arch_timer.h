@@ -24,20 +24,20 @@ enum kvm_arch_timer_regs {
 	TIMER_REG_TVAL,
 	TIMER_REG_CTL,
 	TIMER_REG_VOFF,
+	NR_TIMER_REGS	/* Nothing after this line! */
 };
 
 struct arch_timer_context {
 	struct kvm_vcpu			*vcpu;
 
-	/* Registers: control register, timer value */
-	u32				cnt_ctl;
-	u64				cnt_cval;
+	/* Registers */
+	u64				regs[NR_TIMER_REGS];
+
+	/* For NEVE register access redirection purpose */
+	u64				*regs_backend[NR_TIMER_REGS];
 
 	/* Timer IRQ */
 	struct kvm_irq_level		irq;
-
-	/* Virtual offset */
-	u64				cntvoff;
 
 	/* Emulated Timer (may be unused) */
 	struct hrtimer			hrtimer;
@@ -53,6 +53,8 @@ struct arch_timer_context {
 	u32				host_timer_irq;
 	u32				host_timer_irq_flags;
 };
+
+#define __timer_reg(t, r)	(*((t)->regs_backend[(r)]))
 
 struct timer_map {
 	struct arch_timer_context *direct_vtimer;
