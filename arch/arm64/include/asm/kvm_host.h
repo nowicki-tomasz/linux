@@ -261,7 +261,7 @@ enum vcpu_sysreg {
 
 static inline bool sysreg_is_el2(int reg)
 {
-	return reg >= FIRST_EL2_SYSREG && reg < NR_SYS_REGS;
+	return reg >= FIRST_EL2_SYSREG;
 }
 
 /* 32bit mapping */
