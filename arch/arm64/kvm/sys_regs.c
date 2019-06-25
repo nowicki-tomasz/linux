@@ -175,9 +175,6 @@ const struct el2_sysreg_map *find_el2_sysreg(const struct el2_sysreg_map *map,
 {
 	const struct el2_sysreg_map *entry;
 
-	if (!sysreg_is_el2(reg))
-		return NULL;
-
 	entry = &nested_sysreg_map[reg - FIRST_EL2_SYSREG];
 	if (entry->sysreg == __INVALID_SYSREG__)
 		return NULL;
