@@ -140,7 +140,7 @@ struct el2_sysreg_map {
 	int sysreg;	/* EL2 register index into the array above */
 	int mapping;	/* associated EL1 register */
 	u64 (*translate)(u64 value);
-} nested_sysreg_map[NR_SYS_REGS - FIRST_EL2_SYSREG] = {
+} nested_sysreg_map[] = {
 	PURE_EL2_SYSREG( VPIDR_EL2 ),
 	PURE_EL2_SYSREG( VMPIDR_EL2 ),
 	PURE_EL2_SYSREG( ACTLR_EL2 ),
