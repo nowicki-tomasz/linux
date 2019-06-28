@@ -266,6 +266,7 @@ enum vcpu_sysreg {
 	VNCR(MDSCR_EL1),/* Monitor Debug System Control Register */
 	VNCR(ELR_EL1),
 	VNCR(SP_EL1),
+	VNCR(SPSR_EL1),
 	VNCR(VPIDR_EL2),/* Virtualization Processor ID Register */
 	VNCR(VMPIDR_EL2),/* Virtualization Multiprocessor ID Register */
 	VNCR(HCR_EL2),	/* Hypervisor Configuration Register */
@@ -336,7 +337,6 @@ enum vcpu_sysreg {
 struct kvm_cpu_context {
 	struct user_pt_regs regs;	/* sp = sp_el0 */
 
-	u64	spsr_el1;		/* aka spsr_svc */
 	u64	spsr_abt;
 	u64	spsr_und;
 	u64	spsr_irq;
