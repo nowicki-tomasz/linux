@@ -1802,9 +1802,9 @@ static bool access_sp_el1(struct kvm_vcpu *vcpu,
 {
 	/* SP_EL1 is NOT maintained in sys_regs array */
 	if (p->is_write)
-		vcpu->arch.ctxt.gp_regs.sp_el1 = p->regval;
+		vcpu->arch.ctxt.sp_el1 = p->regval;
 	else
-		p->regval = vcpu->arch.ctxt.gp_regs.sp_el1;
+		p->regval = vcpu->arch.ctxt.sp_el1;
 
 	return true;
 }
@@ -1830,9 +1830,9 @@ static bool access_elr(struct kvm_vcpu *vcpu,
 		return false;
 
 	if (p->is_write)
-		vcpu->arch.ctxt.gp_regs.elr_el1 = p->regval;
+		vcpu->arch.ctxt.elr_el1 = p->regval;
 	else
-		p->regval = vcpu->arch.ctxt.gp_regs.elr_el1;
+		p->regval = vcpu->arch.ctxt.elr_el1;
 
 	return true;
 }
@@ -1848,9 +1848,9 @@ static bool access_spsr(struct kvm_vcpu *vcpu,
 		return false;
 
 	if (p->is_write)
-		vcpu->arch.ctxt.gp_regs.spsr[KVM_SPSR_EL1] = p->regval;
+		vcpu->arch.ctxt.spsr[KVM_SPSR_EL1] = p->regval;
 	else
-		p->regval = vcpu->arch.ctxt.gp_regs.spsr[KVM_SPSR_EL1];
+		p->regval = vcpu->arch.ctxt.spsr[KVM_SPSR_EL1];
 
 	return true;
 }
