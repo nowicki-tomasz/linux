@@ -32,6 +32,26 @@ void kvm_init_nested(struct kvm *kvm)
 	kvm->arch.nested_mmus_size = 0;
 }
 
+#define ARM_VNCR_SIZE SZ_4K
+
+int kvm_neve_init(struct kvm_vcpu *vcpu)
+{
+	if (!nested_virt_in_use(vcpu) ||
+	    !cpus_have_const_cap(ARM64_HAS_NEVE_VIRT))
+		return 0;
+
+	if (vcpu->arch.vncr_el2) {
+		kvm_info("VNCR already initialized, reallocating VNCR\n");
+		free_pages_exact(vcpu->arch.vncr_el2, ARM_VNCR_SIZE);
+	}
+
+	vcpu->arch.vncr_el2 = alloc_pages_exact(ARM_VNCR_SIZE, GFP_KERNEL | __GFP_ZERO);
+	if (!vcpu->arch.vncr_el2)
+		return -ENOMEM;
+
+	return 0;
+}
+
 int kvm_vcpu_init_nested(struct kvm_vcpu *vcpu)
 {
 	struct kvm *kvm = vcpu->kvm;
@@ -66,6 +86,13 @@ int kvm_vcpu_init_nested(struct kvm_vcpu *vcpu)
 		ret = kvm_init_stage2_mmu(kvm, &tmp[num_mmus - 2]);
 		if (ret) {
 			kvm_free_stage2_pgd(&tmp[num_mmus - 1]);
+			goto out;
+		}
+
+		ret = kvm_neve_init(vcpu);
+		if (ret) {
+			kvm_free_stage2_pgd(&tmp[num_mmus - 1]);
+			kvm_free_stage2_pgd(&tmp[num_mmus - 2]);
 			goto out;
 		}
 
