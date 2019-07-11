@@ -147,6 +147,55 @@ static const struct arm_smmu_impl arm_mmu500_impl = {
 	.reset = arm_mmu500_reset,
 };
 
+static u64 mrvl_smmu_readq(struct arm_smmu_device *smmu, int page,
+			    int offset)
+{
+	u64 val;
+
+	/*
+	 * Marvell Armada-AP806 erratum #582743.
+	 * Split all the readq to double readl
+	 */
+	val = (u64)readl_relaxed(arm_smmu_page(smmu, page) + offset + 4) << 32;
+	val |= readl_relaxed(arm_smmu_page(smmu, page) + offset);
+
+	return val;
+}
+
+static void mrvl_smmu_writeq(struct arm_smmu_device *smmu, int page,
+			      int offset, u64 val)
+{
+	/*
+	 * Marvell Armada-AP806 erratum #582743.
+	 * Split all the writeq to double writel
+	 */
+	writel_relaxed(upper_32_bits(val), arm_smmu_page(smmu, page) + offset + 4);
+	writel_relaxed(lower_32_bits(val), arm_smmu_page(smmu, page) + offset);
+}
+
+static int mrvl_cfg_probe(struct arm_smmu_device *smmu)
+{
+
+	/*
+	 * Armada-AP806 erratum #582743.
+	 * Hide the SMMU_IDR2.PTFSv8 fields to sidestep the AArch64
+	 * formats altogether and allow using 32 bits access on the
+	 * interconnect.
+	 */
+	smmu->features &= ~(ARM_SMMU_FEAT_FMT_AARCH64_4K |
+				ARM_SMMU_FEAT_FMT_AARCH64_16K |
+				ARM_SMMU_FEAT_FMT_AARCH64_64K);
+
+	return 0;
+}
+
+static const struct arm_smmu_impl mrvl_mmu500_impl = {
+	.read_reg64 = mrvl_smmu_readq,
+	.write_reg64 = mrvl_smmu_writeq,
+	.cfg_probe = mrvl_cfg_probe,
+	.reset = arm_mmu500_reset,
+};
+
 
 struct arm_smmu_device *arm_smmu_impl_init(struct arm_smmu_device *smmu)
 {
@@ -162,6 +211,9 @@ struct arm_smmu_device *arm_smmu_impl_init(struct arm_smmu_device *smmu)
 		break;
 	case CAVIUM_SMMUV2:
 		return cavium_smmu_impl_init(smmu);
+	case MRVL_MMU500:
+		smmu->impl = &mrvl_mmu500_impl;
+		break;
 	default:
 		break;
 	}
