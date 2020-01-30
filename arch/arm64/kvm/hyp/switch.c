@@ -625,7 +625,7 @@ static bool __hyp_text handle_tx2_tvm(struct kvm_vcpu *vcpu)
  * main run loop.
  */
 static bool __hyp_text fixup_guest_exit(struct kvm_vcpu *vcpu, u64 *exit_code,
-					bool hyp_ctxt)
+					bool hyp_ctxt, u64 hcr)
 {
 	/*
 	 * Sync pstate back as early as possible, so that is_hyp_ctxt()
@@ -665,6 +665,19 @@ static bool __hyp_text fixup_guest_exit(struct kvm_vcpu *vcpu, u64 *exit_code,
 
 	if (ARM_EXCEPTION_CODE(*exit_code) != ARM_EXCEPTION_IRQ)
 		vcpu->arch.fault.esr_el2 = read_sysreg_el2(SYS_ESR);
+
+	if (enhanced_nested_virt_in_use(vcpu) &&
+	    ((hcr ^ __vcpu_sys_reg(vcpu, HCR_EL2)) & HCR_E2H)) {
+		/*
+		 * Save the new HCR_EL2, restore the old one, and kick the
+		 * vcpu into a fake interrupt with a pending request...
+		 */
+		vcpu->arch.fault.hcr_el2 = __vcpu_sys_reg(vcpu, HCR_EL2);
+		__vcpu_sys_reg(vcpu, HCR_EL2) = hcr;
+		kvm_make_request(KVM_REQ_GUEST_HYP_E2H_FLIP, vcpu);
+		*exit_code &= ~ARM_EXCEPTION_CODE(*exit_code);
+		*exit_code |= ARM_EXCEPTION_IRQ;
+	}
 
 	/*
 	 * We're using the raw exception code in order to only process
@@ -812,7 +825,7 @@ int kvm_vcpu_run_vhe(struct kvm_vcpu *vcpu)
 {
 	struct kvm_cpu_context *host_ctxt;
 	struct kvm_cpu_context *guest_ctxt;
-	u64 exit_code;
+	u64 exit_code, guest_hcr;
 	bool hyp_ctxt;
 
 	host_ctxt = vcpu->arch.host_cpu_context;
@@ -848,11 +861,13 @@ int kvm_vcpu_run_vhe(struct kvm_vcpu *vcpu)
 	hyp_ctxt = is_hyp_ctxt(vcpu);
 
 	do {
+		guest_hcr = __vcpu_sys_reg(vcpu, HCR_EL2);
+
 		/* Jump in the fire! */
 		exit_code = __guest_enter(vcpu, host_ctxt);
 
 		/* And we're baaack! */
-	} while (fixup_guest_exit(vcpu, &exit_code, hyp_ctxt));
+	} while (fixup_guest_exit(vcpu, &exit_code, hyp_ctxt, guest_hcr));
 
 	__set_host_arch_workaround_state(vcpu);
 
@@ -926,7 +941,7 @@ int __hyp_text __kvm_vcpu_run_nvhe(struct kvm_vcpu *vcpu)
 		exit_code = __guest_enter(vcpu, host_ctxt);
 
 		/* And we're baaack! */
-	} while (fixup_guest_exit(vcpu, &exit_code, false));
+	} while (fixup_guest_exit(vcpu, &exit_code, false, 0));
 
 	__set_host_arch_workaround_state(vcpu);
 

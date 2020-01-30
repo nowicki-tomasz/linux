@@ -760,6 +760,9 @@ void check_nested_vcpu_requests(struct kvm_vcpu *vcpu)
 {
 	if (kvm_check_request(KVM_REQ_GUEST_HYP_IRQ_PENDING, vcpu))
 		kvm_inject_nested_irq(vcpu);
+
+	if (kvm_check_request(KVM_REQ_GUEST_HYP_E2H_FLIP, vcpu))
+		vcpu_write_sys_reg(vcpu, vcpu->arch.fault.hcr_el2, HCR_EL2);
 }
 
 #define FEATURE(x)	(GENMASK_ULL(x##_SHIFT + 3, x##_SHIFT))
