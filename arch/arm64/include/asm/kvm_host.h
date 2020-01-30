@@ -46,6 +46,7 @@
 #define KVM_REQ_VCPU_RESET		KVM_ARCH_REQ(2)
 #define KVM_REQ_RECORD_STEAL		KVM_ARCH_REQ(3)
 #define KVM_REQ_GUEST_HYP_IRQ_PENDING	KVM_ARCH_REQ(4)
+#define KVM_REQ_GUEST_HYP_E2H_FLIP	KVM_ARCH_REQ(5)
 
 DECLARE_STATIC_KEY_FALSE(userspace_irqchip_in_use);
 
@@ -153,6 +154,8 @@ struct kvm_vcpu_fault_info {
 	u64 far_el2;		/* Hyp Fault Address Register */
 	u64 hpfar_el2;		/* Hyp IPA Fault Address Register */
 	u64 disr_el1;		/* Deferred [SError] Status Register */
+
+	u64 hcr_el2;		/* HCR_EL2 after E2H flip */
 };
 
 /*
