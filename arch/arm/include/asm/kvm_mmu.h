@@ -418,7 +418,7 @@ static inline int hyp_map_aux_data(void)
 
 #define kvm_phys_to_vttbr(addr)		(addr)
 
-static inline void kvm_set_ipa_limit(void) {}
+static inline int kvm_set_ipa_limit(void) { return 0; }
 
 static __always_inline u64 kvm_get_vttbr(struct kvm *kvm)
 {
