@@ -135,6 +135,8 @@ static void __hyp_text __debug_save_state(struct kvm_guest_debug_arch *dbg,
 	u64 aa64dfr0;
 	int brps, wrps;
 
+	ctxt_sys_reg(ctxt, MDSCR_EL1)	= read_sysreg(mdscr_el1);
+
 	aa64dfr0 = read_sysreg(id_aa64dfr0_el1);
 	brps = (aa64dfr0 >> 12) & 0xf;
 	wrps = (aa64dfr0 >> 20) & 0xf;
@@ -152,6 +154,8 @@ static void __hyp_text __debug_restore_state(struct kvm_guest_debug_arch *dbg,
 {
 	u64 aa64dfr0;
 	int brps, wrps;
+
+	write_sysreg(ctxt_sys_reg(ctxt, MDSCR_EL1),  mdscr_el1);
 
 	aa64dfr0 = read_sysreg(id_aa64dfr0_el1);
 
@@ -180,11 +184,17 @@ void __hyp_text __debug_switch_to_guest(struct kvm_vcpu *vcpu)
 	if (!has_vhe())
 		__debug_save_spe_nvhe(&vcpu->arch.host_debug_state.pmscr_el1);
 
+	host_ctxt = kern_hyp_va(vcpu->arch.host_cpu_context);
+	guest_ctxt = &vcpu->arch.ctxt;
+
+	if (vcpu->arch.flags & (KVM_ARM64_SINGLESTEP | KVM_ARM64_DEBUG_DIRTY)) {
+		ctxt_sys_reg(host_ctxt, MDSCR_EL1) = read_sysreg(mdscr_el1);
+		write_sysreg(ctxt_sys_reg(guest_ctxt, MDSCR_EL1), mdscr_el1);
+	}
+
 	if (!(vcpu->arch.flags & KVM_ARM64_DEBUG_DIRTY))
 		return;
 
-	host_ctxt = kern_hyp_va(vcpu->arch.host_cpu_context);
-	guest_ctxt = &vcpu->arch.ctxt;
 	host_dbg = &vcpu->arch.host_debug_state.regs;
 	guest_dbg = kern_hyp_va(vcpu->arch.debug_ptr);
 
@@ -202,11 +212,19 @@ void __hyp_text __debug_switch_to_host(struct kvm_vcpu *vcpu)
 	if (!has_vhe())
 		__debug_restore_spe_nvhe(vcpu->arch.host_debug_state.pmscr_el1);
 
+	host_ctxt = kern_hyp_va(vcpu->arch.host_cpu_context);
+	guest_ctxt = &vcpu->arch.ctxt;
+
+	if (vcpu->arch.flags & (KVM_ARM64_SINGLESTEP | KVM_ARM64_DEBUG_DIRTY)) {
+		u64 val = read_sysreg(mdscr_el1);
+		ctxt_sys_reg(guest_ctxt, MDSCR_EL1) = kvm_sanitize_mdscr(val);
+		write_sysreg(ctxt_sys_reg(host_ctxt, MDSCR_EL1), mdscr_el1);
+		vcpu->arch.flags &= ~KVM_ARM64_SINGLESTEP;
+	}
+
 	if (!(vcpu->arch.flags & KVM_ARM64_DEBUG_DIRTY))
 		return;
 
-	host_ctxt = kern_hyp_va(vcpu->arch.host_cpu_context);
-	guest_ctxt = &vcpu->arch.ctxt;
 	host_dbg = &vcpu->arch.host_debug_state.regs;
 	guest_dbg = kern_hyp_va(vcpu->arch.debug_ptr);
 

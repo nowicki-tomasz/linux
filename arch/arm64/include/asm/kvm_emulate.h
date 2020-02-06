@@ -687,6 +687,11 @@ static inline void __hyp_text __kvm_skip_instr(struct kvm_vcpu *vcpu)
 	write_sysreg_el2(*vcpu_pc(vcpu), SYS_ELR);
 }
 
+static inline u64 kvm_sanitize_mdscr(u64 val)
+{
+	return val & (DBG_MDSCR_SS | DBG_MDSCR_KDE | DBG_MDSCR_MDE);
+}
+
 static inline bool kvm_is_shadow_s2_fault(struct kvm_vcpu *vcpu)
 {
 	return (vcpu->arch.hw_mmu != &vcpu->kvm->arch.mmu &&

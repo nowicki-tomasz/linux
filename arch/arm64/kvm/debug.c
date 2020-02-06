@@ -16,11 +16,6 @@
 
 #include "trace.h"
 
-/* These are the bits of MDSCR_EL1 we may manipulate */
-#define MDSCR_EL1_DEBUG_MASK	(DBG_MDSCR_SS | \
-				DBG_MDSCR_KDE | \
-				DBG_MDSCR_MDE)
-
 static DEFINE_PER_CPU(u32, mdcr_el2);
 
 /**
@@ -196,6 +191,9 @@ void kvm_arm_setup_debug(struct kvm_vcpu *vcpu)
 	/* If KDE or MDE are set, perform a full save/restore cycle. */
 	if (vcpu_read_sys_reg(vcpu, MDSCR_EL1) & (DBG_MDSCR_KDE | DBG_MDSCR_MDE))
 		vcpu->arch.flags |= KVM_ARM64_DEBUG_DIRTY;
+	/* If MDSCR_EL1.SS is set, it must be save/restored */
+	if (vcpu_read_sys_reg(vcpu, MDSCR_EL1) & DBG_MDSCR_SS)
+		vcpu->arch.flags |= KVM_ARM64_SINGLESTEP;
 
 	/* Write mdcr_el2 changes since vcpu_load on VHE systems */
 	if (has_vhe() && orig_mdcr_el2 != vcpu->arch.mdcr_el2)

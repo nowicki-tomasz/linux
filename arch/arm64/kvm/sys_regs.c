@@ -750,6 +750,16 @@ static bool trap_debug_regs(struct kvm_vcpu *vcpu,
 	return true;
 }
 
+static bool trap_mdscr_el1(struct kvm_vcpu *vcpu,
+			   struct sys_reg_params *p,
+			   const struct sys_reg_desc *r)
+{
+	if (p->is_write)
+		p->regval = kvm_sanitize_mdscr(p->regval);
+
+	return trap_debug_regs(vcpu, p, r);;
+}
+
 /*
  * reg_to_dbg/dbg_to_reg
  *
@@ -2023,7 +2033,7 @@ static const struct sys_reg_desc sys_reg_descs[] = {
 	DBG_BCR_BVR_WCR_WVR_EL1(0),
 	DBG_BCR_BVR_WCR_WVR_EL1(1),
 	{ SYS_DESC(SYS_MDCCINT_EL1), trap_debug_regs, reset_val, MDCCINT_EL1, 0 },
-	{ SYS_DESC(SYS_MDSCR_EL1), trap_debug_regs, reset_val, MDSCR_EL1, 0 },
+	{ SYS_DESC(SYS_MDSCR_EL1), trap_mdscr_el1, reset_val, MDSCR_EL1, 0 },
 	DBG_BCR_BVR_WCR_WVR_EL1(2),
 	DBG_BCR_BVR_WCR_WVR_EL1(3),
 	DBG_BCR_BVR_WCR_WVR_EL1(4),

@@ -26,8 +26,6 @@
 
 static void __hyp_text __sysreg_save_common_state(struct kvm_cpu_context *ctxt)
 {
-	ctxt_sys_reg(ctxt, MDSCR_EL1)	= read_sysreg(mdscr_el1);
-
 	/*
 	 * The host arm64 Linux uses sp_el0 to point to 'current' and it must
 	 * therefore be saved/restored on every entry/exit to/from the guest.
@@ -143,8 +141,6 @@ NOKPROBE_SYMBOL(sysreg_save_guest_state_vhe);
 
 static void __hyp_text __sysreg_restore_common_state(struct kvm_cpu_context *ctxt)
 {
-	write_sysreg(ctxt_sys_reg(ctxt, MDSCR_EL1),  mdscr_el1);
-
 	/*
 	 * The host arm64 Linux uses sp_el0 to point to 'current' and it must
 	 * therefore be saved/restored on every entry/exit to/from the guest.
