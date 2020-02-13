@@ -47,7 +47,8 @@ int kvm_vcpu_init_nested(struct kvm_vcpu *vcpu)
 	if (!cpus_have_const_cap(ARM64_HAS_NESTED_VIRT))
 		return -EINVAL;
 
-	if (cpus_have_const_cap(ARM64_HAS_ENHANCED_NESTED_VIRT)) {
+	if (cpus_have_const_cap(ARM64_HAS_ENHANCED_NESTED_VIRT) &&
+	    !vcpu->arch.ctxt.vncr_array) {
 		vcpu->arch.ctxt.vncr_array = (u64 *)__get_free_page(GFP_KERNEL | __GFP_ZERO);
 		if (!vcpu->arch.ctxt.vncr_array)
 			return -ENOMEM;
@@ -66,20 +67,28 @@ int kvm_vcpu_init_nested(struct kvm_vcpu *vcpu)
 		       num_mmus * sizeof(*kvm->arch.nested_mmus),
 		       GFP_KERNEL | __GFP_ZERO);
 	if (tmp) {
-		if (kvm_init_stage2_mmu(kvm, &tmp[num_mmus - 1]) ||
+		if (!tmp[num_mmus - 1].pgd &&
+		    kvm_init_stage2_mmu(kvm, &tmp[num_mmus - 1])) {
+			kvm_free_stage2_pgd(&tmp[num_mmus - 1]);
+			free_page((unsigned long)vcpu->arch.ctxt.vncr_array);
+			vcpu->arch.ctxt.vncr_array = NULL;
+			goto out;
+		}
+
+		if (!tmp[num_mmus - 2].pgd &&
 		    kvm_init_stage2_mmu(kvm, &tmp[num_mmus - 2])) {
 			kvm_free_stage2_pgd(&tmp[num_mmus - 1]);
 			kvm_free_stage2_pgd(&tmp[num_mmus - 2]);
 			free_page((unsigned long)vcpu->arch.ctxt.vncr_array);
 			vcpu->arch.ctxt.vncr_array = NULL;
-		} else {
-			kvm->arch.nested_mmus_size = num_mmus;
-			ret = 0;
+			goto out;
 		}
 
 		kvm->arch.nested_mmus = tmp;
+		kvm->arch.nested_mmus_size = num_mmus;
+		ret = 0;
 	}
-
+out:
 	mutex_unlock(&kvm->lock);
 	return ret;
 }
