@@ -48,3 +48,11 @@ config VFIO_PLATFORM_AHCI_RESET
 	  Enables the VFIO platform driver to handle reset for SATA AHCI
 
 	  If you don't know what to do here, say N.
+
+config VFIO_PLATFORM_SDHCI_RESET
+	tristate "VFIO support for SDHCI reset"
+	depends on VFIO_PLATFORM
+	help
+	  Enables the VFIO platform driver to handle reset for SDHCI
+
+	  If you don't know what to do here, say N.
