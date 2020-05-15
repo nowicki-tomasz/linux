@@ -205,10 +205,21 @@ static void armada8k_pcie_establish_link(struct armada8k_pcie *pcie)
 		dev_err(pci->dev, "Link not up after reconfiguration\n");
 }
 
+#define PCIE_STREAM_ID			0x64 + 0x8000
+#define STREAM_ID_BUS_BITS		2
+#define STREAM_ID_DEV_BITS		2
+#define STREAM_ID_FUNC_BITS		3
+#define STREAM_ID_PREFIX		0x80
+#define PCIE_STREAM_ID_CFG		(STREAM_ID_PREFIX << 12 | STREAM_ID_BUS_BITS << 8 | \
+					STREAM_ID_DEV_BITS << 4 | STREAM_ID_FUNC_BITS)
+
 static int armada8k_pcie_host_init(struct pcie_port *pp)
 {
 	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
 	struct armada8k_pcie *pcie = to_armada8k_pcie(pci);
+
+	/* Setup Requester-ID to Stream-ID mapping */
+	dw_pcie_writel_dbi(pci, PCIE_STREAM_ID, PCIE_STREAM_ID_CFG);
 
 	dw_pcie_setup_rc(pp);
 	armada8k_pcie_establish_link(pcie);
