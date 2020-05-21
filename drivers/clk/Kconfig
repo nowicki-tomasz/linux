@@ -305,6 +305,12 @@ config COMMON_CLK_FIXED_MMIO
 	help
 	  Support for Memory Mapped IO Fixed clocks
 
+config COMMON_CLK_MMIO
+	bool "Clock driver for Memory Mapped values"
+	depends on COMMON_CLK && OF
+	help
+	  Support for Memory Mapped IO clocks
+
 source "drivers/clk/actions/Kconfig"
 source "drivers/clk/analogbits/Kconfig"
 source "drivers/clk/bcm/Kconfig"

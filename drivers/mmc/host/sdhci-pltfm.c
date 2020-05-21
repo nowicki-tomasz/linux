@@ -29,7 +29,11 @@ unsigned int sdhci_pltfm_clk_get_max_clock(struct sdhci_host *host)
 {
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 
-	return clk_get_rate(pltfm_host->clk);
+	unsigned int rate = clk_get_rate(pltfm_host->clk);
+
+	pr_err("\n------------------ %s rate %d ------------\n", __func__, rate);
+
+	return rate;
 }
 EXPORT_SYMBOL_GPL(sdhci_pltfm_clk_get_max_clock);
 

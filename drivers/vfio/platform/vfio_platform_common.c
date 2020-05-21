@@ -218,6 +218,264 @@ static int vfio_platform_call_reset(struct vfio_platform_device *vdev,
 	return -EINVAL;
 }
 
+#include <linux/clk.h>
+#include <linux/clk-provider.h>
+
+static void vfio_platform_clk_init(struct vfio_platform_device *vdev)
+{
+	struct device *dev = vdev->device;
+	struct clk *clk;
+	int ret;
+
+//	INIT_LIST_HEAD(&vdev->clk_list);
+
+	ret = devm_clk_bulk_get_all(dev, &vdev->clks);
+	if (ret < 0) {
+		dev_err(dev, "failed to get clocks %d\n", ret);
+		return;
+	}
+	vdev->num_clks = ret;
+}
+
+//struct vfio_platform_clk {
+//	struct list_head	list;
+//	struct clk 		*clk;
+//	unsigned int		index;
+//};
+//
+//static int vfio_platform_add_clk(struct vfio_platform_device *vdev,
+//				 struct clk *clk, unsigned index)
+//{
+//	struct vfio_platform_clk *vfio_clk;
+//
+//	vfio_clk = kzalloc(sizeof(struct vfio_platform_device), GFP_ATOMIC);
+//	if (WARN_ON(!vfio_clk))
+//		return -ENOMEM;
+//
+//	vfio_clk->clk = clk;
+//	vfio_clk->index = index;
+//	list_add_tail(&vfio_clk->list, &vdev->clk_list);
+//	return 0;
+//}
+//
+//static void vfio_platform_del_clk(struct vfio_platform_device *vdev,
+//				 unsigned index)
+//{
+//	struct vfio_platform_clk *vfio_clk, *tmp;
+//
+//	list_for_each_entry_safe(vfio_clk, tmp, &vdev->clk_list, list) {
+//		if (vfio_clk->index == index) {
+//			clk_unprepare(vfio_clk->clk);
+//			list_del(&vfio_clk->list);
+//			kfree(vfio_clk);
+//			break;
+//		}
+//	}
+//}
+//
+//static int vfio_platform_find_clk(struct vfio_platform_device *vdev,
+//				  unsigned index)
+//{
+//	struct vfio_platform_clk *vfio_clk;
+//
+//	if (index < 0)
+//		return -EINVAL;
+//
+//	list_for_each_entry(vfio_clk, &vdev->clk_list, list) {
+//		if (index == vfio_clk->index)
+//			return vfio_clk->clk;
+//	}
+//
+//	return NULL;
+//}
+
+//static int vfio_platform_enable_clk(struct vfio_platform_device *vdev,
+//				    unsigned index)
+//{
+//	struct device *dev = vdev->device;
+//	struct clk *clk;
+//	int ret;
+//
+//	if (index < 0 || index > vdev->num_clks - 1)
+//		return -EINVAL;
+//
+//	return clk_prepare_enable(vdev->clks[index].clk);
+
+//	pr_err("%s 1\n", __func__);
+//
+//	if (index < 0)
+//		return -EINVAL;
+//
+//	pr_err("%s 2 index %d\n", __func__, index);
+//
+//	clk = of_clk_get(dev->of_node, index);
+//	if (IS_ERR(clk))
+//		return PTR_ERR(clk);
+//
+//	pr_err("%s 3\n", __func__);
+//
+//	ret = clk_prepare_enable(clk);
+//	if (ret) {
+//		clk_put(clk);
+//		return -ENODEV;
+//	}
+//
+//	pr_err("%s 4\n", __func__);
+//
+//	ret = vfio_platform_add_clk(vdev, clk, index);
+//	if (ret)
+//		clk_disable_unprepare(clk);
+
+//	return ret;
+//}
+
+//static int vfio_platform_disable_clk(struct vfio_platform_device *vdev,
+//				     unsigned index)
+//{
+//	if (index < 0 || index > vdev->num_clks - 1)
+//		return -EINVAL;
+//
+//	return clk_disable_unprepare(vdev->clks[index].clk);
+
+//	struct clk *clk = NULL;
+//
+//	pr_err("%s 1\n", __func__);
+//
+//	clk = vfio_platform_find_clk(vdev, index);
+//	if (!clk)
+//		return -ENXIO;
+//
+//	pr_err("%s 3\n", __func__);
+//
+//	clk_disable_unprepare(clk);
+//	list_del(&vfio_clk->list);
+//	kfree(vfio_clk);
+//	return 0;
+//}
+
+//static int vfio_platform_clk_get_rate(struct vfio_platform_device *vdev,
+//				     unsigned index, uint32_t *rate)
+//{
+//	struct vfio_platform_clk *vfio_clk;
+//	struct clk *clk = NULL;
+//
+//	pr_err("%s 1\n", __func__);
+//
+//	clk = vfio_platform_find_clk(vdev, index);
+//	if (!clk)
+//		return -ENXIO;
+//
+//	pr_err("%s 2\n", __func__);
+//
+//	*rate = clk_get_rate(clk);
+//	return 0;
+//}
+//
+//static int vfio_platform_clk_get_flags(struct vfio_platform_device *vdev,
+//				       unsigned index, uint32_t *flags)
+//{
+//	struct clk *clk;
+//
+//	pr_err("%s 1\n", __func__);
+//
+//	clk = vfio_platform_find_clk(vdev, index);
+//	if (!clk)
+//		return -ENXIO;
+//
+//	pr_err("%s 2\n", __func__);
+//
+//	*flags = __clk_get_flags(clk);
+//	return 0;
+//}
+
+static int vfio_platform_clock(unsigned long arg,
+			       struct vfio_platform_device *vdev,
+			       struct vfio_clk *hdr)
+{
+	uint32_t rate, flags;
+	unsigned long minsz;
+	int ret = 0;
+
+	if (hdr->index < 0 || hdr->index > vdev->num_clks - 1)
+		return -EINVAL;
+
+	pr_err("%s 1\n", __func__);
+
+	switch (hdr->flags) {
+	case VFIO_CLK_SET_ENABLE:
+		pr_err("%s 2\n", __func__);
+		ret = clk_prepare_enable(vdev->clks[hdr->index].clk);
+//		ret = vfio_platform_enable_clk(vdev, hdr->index);
+		break;
+	case VFIO_CLK_SET_DISABLE:
+		pr_err("%s 3\n", __func__);
+		clk_disable_unprepare(vdev->clks[hdr->index].clk);
+//		ret = vfio_platform_disable_clk(vdev, hdr->index);
+		break;
+	case VFIO_CLK_SET_GET_RATE:
+
+		pr_err("%s 41\n", __func__);
+
+		minsz = offsetofend(struct vfio_clk, index);
+
+		pr_err("%s 42\n", __func__);
+
+		if (hdr->argsz - minsz < sizeof(rate))
+			return -EINVAL;
+//		rate = memdup_user((void __user *)(arg + minsz),
+//				    hdr->argsz - minsz);
+//		if (IS_ERR(rate))
+//			return PTR_ERR(rate);
+
+		pr_err("%s 43\n", __func__);
+
+		rate = clk_get_rate(vdev->clks[hdr->index].clk);
+
+//		ret = vfio_platform_clk_get_rate(vdev, hdr->index, &rate);
+//		if (ret)
+//			break;
+
+		pr_err("%s 44 index %d rate %ld\n",
+		       __func__, (int)hdr->index, (long)rate);
+
+		ret = copy_to_user((void __user *)arg + minsz, &rate, sizeof(rate)) ?
+			-EFAULT : 0;
+
+		break;
+	case VFIO_CLK_SET_GET_FLAGS:
+		pr_err("%s 51\n", __func__);
+
+		minsz = offsetofend(struct vfio_clk, index);
+
+		pr_err("%s 52\n", __func__);
+
+		if (hdr->argsz - minsz < sizeof(flags))
+			return -EINVAL;
+
+		pr_err("%s 53\n", __func__);
+
+		flags = __clk_get_flags(vdev->clks[hdr->index].clk);
+//		ret = vfio_platform_clk_get_flags(vdev, hdr->index, &flags);
+//		if (ret)
+//			break;
+
+		pr_err("%s 54 index %d rate %ld\n",
+		       __func__, (int)hdr->index, (long)flags);
+
+		ret = copy_to_user((void __user *)arg + minsz, &flags, sizeof(flags)) ?
+			-EFAULT : 0;
+		break;
+	case VFIO_CLK_SET_SET_RATE:
+	default:
+		ret = -ENXIO;
+		break;
+	}
+
+	pr_err("%s 7 ret %d\n", __func__, ret);
+
+	return ret;
+}
+
 static void vfio_platform_release(void *device_data)
 {
 	struct vfio_platform_device *vdev = device_data;
@@ -275,6 +533,8 @@ static int vfio_platform_open(void *device_data)
 				 ret, extra_dbg ? extra_dbg : "");
 			goto err_rst;
 		}
+
+		vfio_platform_clk_init(vdev);
 	}
 
 	vdev->refcnt++;
@@ -396,6 +656,29 @@ static long vfio_platform_ioctl(void *device_data,
 
 	} else if (cmd == VFIO_DEVICE_RESET) {
 		return vfio_platform_call_reset(vdev, NULL);
+	} else if (cmd == VFIO_DEVICE_CLK) {
+		struct vfio_clk hdr;
+		int ret = 0;
+
+		pr_err("%s 1\n", __func__);
+
+		minsz = offsetofend(struct vfio_clk, index);
+
+		if (copy_from_user(&hdr, (void __user *)arg, minsz))
+			return -EFAULT;
+
+		pr_err("%s 2\n", __func__);
+
+		if (hdr.argsz < minsz)
+			return -EINVAL;
+
+		pr_err("%s 3\n", __func__);
+
+		mutex_lock(&vdev->igate);
+		ret = vfio_platform_clock(arg, vdev, &hdr);
+		mutex_unlock(&vdev->igate);
+
+		return ret;
 	}
 
 	return -ENOTTY;

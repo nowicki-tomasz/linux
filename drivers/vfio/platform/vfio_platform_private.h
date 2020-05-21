@@ -53,6 +53,9 @@ struct vfio_platform_device {
 	const char			*acpihid;
 	struct module			*reset_module;
 	struct device			*device;
+//	struct list_head		clk_list;
+	struct clk_bulk_data		*clks;
+	int				num_clks;
 
 	/*
 	 * These fields should be filled by the bus specific binder

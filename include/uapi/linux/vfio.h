@@ -527,6 +527,24 @@ struct vfio_irq_set {
  */
 #define VFIO_DEVICE_RESET		_IO(VFIO_TYPE, VFIO_BASE + 11)
 
+/**
+ * VFIO_DEVICE_CLK - _IO(VFIO_TYPE, VFIO_BASE + 11)
+ *
+ * Manage device clocks.
+ */
+struct vfio_clk {
+	__u32	argsz;
+	__u32	flags;
+#define VFIO_CLK_SET_ENABLE		(1 << 0)
+#define VFIO_CLK_SET_DISABLE		(1 << 1)
+#define VFIO_CLK_SET_GET_RATE		(1 << 2)
+#define VFIO_CLK_SET_SET_RATE		(1 << 3)
+#define VFIO_CLK_SET_GET_FLAGS		(1 << 4)
+	__u32	index;
+	__u8	data[];
+};
+#define VFIO_DEVICE_CLK			_IO(VFIO_TYPE, VFIO_BASE + 12)
+
 /*
  * The VFIO-PCI bus driver makes use of the following fixed region and
  * IRQ index mapping.  Unimplemented regions return a size of zero.

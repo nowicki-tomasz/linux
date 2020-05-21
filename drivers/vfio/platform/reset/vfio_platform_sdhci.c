@@ -42,14 +42,14 @@ int vfio_platform_sdhci_reset(struct vfio_platform_device *vdev)
 	struct phy *phy;
 	int ret, i;
 
-	for (i = 0; i < MAX_SDHCI_CLOCKS; i++) {
-		clk = of_clk_get(np, i);
-		if (!IS_ERR(clk)) {
-			ret = clk_prepare_enable(clk);
-			if (ret)
-				return -ENODEV;
-		}
-	}
+//	for (i = 0; i < MAX_SDHCI_CLOCKS; i++) {
+//		clk = of_clk_get(np, i);
+//		if (!IS_ERR(clk)) {
+//			ret = clk_prepare_enable(clk);
+//			if (ret)
+//				return -ENODEV;
+//		}
+//	}
 
 //	for_each_child_of_node(np, child) {
 //		if (child->name && (of_node_cmp(child->name, "sata-port") == 0)) {
