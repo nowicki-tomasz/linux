@@ -269,6 +269,10 @@ static int vfio_platform_open(void *device_data)
 		if (ret < 0)
 			goto err_pm;
 
+		ret = vfio_platform_clk_init(vdev);
+		if (ret < 0)
+			goto err_rst;
+
 		ret = vfio_platform_call_reset(vdev, &extra_dbg);
 		if (ret && vdev->reset_required) {
 			dev_warn(vdev->device, "reset driver is required and reset call failed in open (%d) %s\n",
@@ -316,6 +320,7 @@ static long vfio_platform_ioctl(void *device_data,
 		info.flags = vdev->flags;
 		info.num_regions = vdev->num_regions;
 		info.num_irqs = vdev->num_irqs;
+		info.num_clks = vdev->num_clks;
 
 		return copy_to_user((void __user *)arg, &info, minsz) ?
 			-EFAULT : 0;
@@ -396,6 +401,23 @@ static long vfio_platform_ioctl(void *device_data,
 
 	} else if (cmd == VFIO_DEVICE_RESET) {
 		return vfio_platform_call_reset(vdev, NULL);
+	} else if (cmd == VFIO_DEVICE_CLK) {
+		struct vfio_clk hdr;
+		int ret = 0;
+
+		minsz = offsetofend(struct vfio_clk, index);
+
+		if (copy_from_user(&hdr, (void __user *)arg, minsz))
+			return -EFAULT;
+
+		if (hdr.argsz < minsz)
+			return -EINVAL;
+
+		mutex_lock(&vdev->igate);
+		ret = vfio_platform_clk_ioctl(arg, vdev, &hdr);
+		mutex_unlock(&vdev->igate);
+
+		return ret;
 	}
 
 	return -ENOTTY;

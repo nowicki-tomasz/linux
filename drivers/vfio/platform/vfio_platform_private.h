@@ -53,6 +53,8 @@ struct vfio_platform_device {
 	const char			*acpihid;
 	struct module			*reset_module;
 	struct device			*device;
+	struct clk_bulk_data		*clks;
+	int				num_clks;
 
 	/*
 	 * These fields should be filled by the bus specific binder
@@ -90,6 +92,12 @@ extern int vfio_platform_set_irqs_ioctl(struct vfio_platform_device *vdev,
 					uint32_t flags, unsigned index,
 					unsigned start, unsigned count,
 					void *data);
+
+struct vfio_clk;
+extern int vfio_platform_clk_init(struct vfio_platform_device *vdev);
+extern int vfio_platform_clk_ioctl(unsigned long arg,
+				   struct vfio_platform_device *vdev,
+				   struct vfio_clk *hdr);
 
 extern void __vfio_platform_register_reset(struct vfio_platform_reset_node *n);
 extern void vfio_platform_unregister_reset(const char *compat,

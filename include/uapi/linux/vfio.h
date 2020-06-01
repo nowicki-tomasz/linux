@@ -202,6 +202,7 @@ struct vfio_device_info {
 #define VFIO_DEVICE_FLAGS_CCW	(1 << 4)	/* vfio-ccw device */
 #define VFIO_DEVICE_FLAGS_AP	(1 << 5)	/* vfio-ap device */
 	__u32	num_regions;	/* Max region index + 1 */
+	__u32	num_clks;	/* Max clock index + 1 */
 	__u32	num_irqs;	/* Max IRQ index + 1 */
 };
 #define VFIO_DEVICE_GET_INFO		_IO(VFIO_TYPE, VFIO_BASE + 7)
@@ -526,6 +527,26 @@ struct vfio_irq_set {
  * Reset a device.
  */
 #define VFIO_DEVICE_RESET		_IO(VFIO_TYPE, VFIO_BASE + 11)
+
+/**
+ * VFIO_DEVICE_CLK - _IO(VFIO_TYPE, VFIO_BASE + 11)
+ *
+ * Manage device clocks.
+ */
+struct vfio_clk {
+	__u32	argsz;
+	__u32	flags;
+#define VFIO_CLK_PREPARE		(1 << 0)
+#define VFIO_CLK_UNPREPARE		(1 << 1)
+#define VFIO_CLK_ENABLE			(1 << 2)
+#define VFIO_CLK_DISABLE		(1 << 3)
+#define VFIO_CLK_GET_RATE		(1 << 4)
+#define VFIO_CLK_SET_RATE		(1 << 5)
+#define VFIO_CLK_GET_FLAGS		(1 << 6)
+	__u32	index;
+	__u8	data[];
+};
+#define VFIO_DEVICE_CLK			_IO(VFIO_TYPE, VFIO_BASE + 12)
 
 /*
  * The VFIO-PCI bus driver makes use of the following fixed region and
