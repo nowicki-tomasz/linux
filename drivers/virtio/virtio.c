@@ -225,10 +225,18 @@ static int virtio_dev_probe(struct device *_d)
 		driver_features_legacy = driver_features;
 	}
 
-	if (device_features & (1ULL << VIRTIO_F_VERSION_1))
+	pr_err("%s device_features 0x%lx, driver_features 0x%lx, driver_features_legacy 0x%lx\n",
+		__func__, (long)device_features, (long)driver_features, (long)driver_features_legacy);
+
+	if (device_features & (1ULL << VIRTIO_F_VERSION_1)) {
+		pr_err("%s modern features\n", __func__);
 		dev->features = driver_features & device_features;
-	else
+	} else {
+		pr_err("%s legacy features\n", __func__);
 		dev->features = driver_features_legacy & device_features;
+	}
+
+	pr_err("%s finalized_features 0x%lx\n", __func__, (long)dev->features);
 
 	/* Transport features always preserved to pass to finalize_features. */
 	for (i = VIRTIO_TRANSPORT_F_START; i < VIRTIO_TRANSPORT_F_END; i++)

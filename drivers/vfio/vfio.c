@@ -998,6 +998,27 @@ void *vfio_del_group_dev(struct device *dev)
 }
 EXPORT_SYMBOL_GPL(vfio_del_group_dev);
 
+int vfio_vhost_register(struct vfio_device *device,
+			struct vfio_vhost_info *info)
+{
+
+	if (unlikely(!device || !device->ops->vhost_register))
+		return -EINVAL;
+
+	return device->ops->vhost_register(device->device_data, info);
+}
+EXPORT_SYMBOL_GPL(vfio_vhost_register);
+
+int vfio_vhost_req(struct vfio_device *device, struct vfio_vhost_req *req)
+{
+
+	if (unlikely(!device || !device->ops->vhost_req))
+		return -EINVAL;
+
+	return device->ops->vhost_req(device->device_data, req);
+}
+EXPORT_SYMBOL_GPL(vfio_vhost_req);
+
 /**
  * VFIO base fd, /dev/vfio/vfio
  */

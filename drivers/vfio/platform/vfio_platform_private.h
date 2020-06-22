@@ -41,6 +41,12 @@ struct vfio_platform_region {
 	void __iomem		*ioaddr;
 };
 
+struct clk_devres {
+	struct clk_bulk_data		*clk_bulk;
+	struct vhost_dev 		**vdev;
+	int				num_clks;
+};
+
 struct vfio_platform_device {
 	struct vfio_platform_region	*regions;
 	u32				num_regions;
@@ -53,6 +59,8 @@ struct vfio_platform_device {
 	const char			*acpihid;
 	struct module			*reset_module;
 	struct device			*device;
+	struct clk_devres		clk_res;
+	struct notifier_block		clk_nb;
 
 	/*
 	 * These fields should be filled by the bus specific binder
@@ -90,6 +98,15 @@ extern int vfio_platform_set_irqs_ioctl(struct vfio_platform_device *vdev,
 					uint32_t flags, unsigned index,
 					unsigned start, unsigned count,
 					void *data);
+
+struct vfio_vhost_req;
+extern int vfio_platform_clk_init(struct vfio_platform_device *vdev);
+extern void vfio_platform_clk_cleanup(struct vfio_platform_device *vdev);
+extern int vfio_platform_clk_register_vhost(struct vfio_platform_device *vdev,
+					    struct vhost_dev *dev,
+					    int index, bool add);
+extern int vfio_platform_clk_handle_req(struct vfio_platform_device *vdev,
+					struct vfio_vhost_req *req);
 
 extern void __vfio_platform_register_reset(struct vfio_platform_reset_node *n);
 extern void vfio_platform_unregister_reset(const char *compat,

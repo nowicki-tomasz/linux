@@ -1451,8 +1451,33 @@ long clk_round_rate(struct clk *clk, unsigned long rate)
 }
 EXPORT_SYMBOL_GPL(clk_round_rate);
 
+static int __clk_notify(struct clk_core *core, unsigned long msg,
+		unsigned long old_rate, unsigned long new_rate)
+{
+	struct clk_notifier *cn;
+	struct clk_notifier_data cnd;
+	int ret = NOTIFY_DONE;
+	int count = 0;
+
+	cnd.old_rate = old_rate;
+	cnd.new_rate = new_rate;
+
+	list_for_each_entry(cn, &clk_notifier_list, node) {
+		if (cn->clk->core == core) {
+			cnd.clk = cn->clk;
+
+			ret = srcu_notifier_call_chain(&cn->notifier_head, msg,
+					&cnd);
+			if (ret & NOTIFY_STOP_MASK)
+				return ret;
+		}
+	}
+
+	return ret;
+}
+
 /**
- * __clk_notify - call clk notifier chain
+ * clk_notify - call clk notifier chain
  * @core: clk that is changing rate
  * @msg: clk notifier type (see include/linux/clk.h)
  * @old_rate: old clk rate
@@ -1465,28 +1490,15 @@ EXPORT_SYMBOL_GPL(clk_round_rate);
  * called if all went well, or NOTIFY_STOP or NOTIFY_BAD immediately if
  * a driver returns that.
  */
-static int __clk_notify(struct clk_core *core, unsigned long msg,
-		unsigned long old_rate, unsigned long new_rate)
+int clk_notify(struct clk *clk, unsigned long msg,
+	       unsigned long old_rate, unsigned long new_rate)
 {
-	struct clk_notifier *cn;
-	struct clk_notifier_data cnd;
-	int ret = NOTIFY_DONE;
+	if (clk->core->notifier_count)
+		return __clk_notify(clk->core, msg, old_rate, new_rate);
 
-	cnd.old_rate = old_rate;
-	cnd.new_rate = new_rate;
-
-	list_for_each_entry(cn, &clk_notifier_list, node) {
-		if (cn->clk->core == core) {
-			cnd.clk = cn->clk;
-			ret = srcu_notifier_call_chain(&cn->notifier_head, msg,
-					&cnd);
-			if (ret & NOTIFY_STOP_MASK)
-				return ret;
-		}
-	}
-
-	return ret;
+	return 0;
 }
+EXPORT_SYMBOL_GPL(clk_notify);
 
 /**
  * __clk_recalc_accuracies
@@ -1599,20 +1611,42 @@ static void __clk_recalc_rates(struct clk_core *core, unsigned long msg)
 		__clk_recalc_rates(child, msg);
 }
 
-static unsigned long clk_core_get_rate(struct clk_core *core)
+unsigned long __clk_core_get_rate(struct clk_core *core, bool force_recalc)
 {
 	unsigned long rate;
 
 	clk_prepare_lock();
 
-	if (core && (core->flags & CLK_GET_RATE_NOCACHE))
-		__clk_recalc_rates(core, 0);
+	if (core && (force_recalc || (core->flags & CLK_GET_RATE_NOCACHE)))
+		__clk_recalc_rates(core, POST_RATE_CHANGE);
 
 	rate = clk_core_get_rate_nolock(core);
 	clk_prepare_unlock();
 
 	return rate;
 }
+
+static unsigned long clk_core_get_rate(struct clk_core *core)
+{
+	return __clk_core_get_rate(core, false);
+}
+
+/**
+ * clk_get_rate_recalc - return the rate of clk after recalc_rate
+ * @clk: the clk whose rate is being returned
+ *
+ * Simply returns the rate of the clk after recalc_rate is being issued,
+ * regardless CLK_GET_RATE_NOCACHE flag.
+ * If clk is NULL then returns 0.
+ */
+unsigned long clk_get_rate_recalc(struct clk *clk)
+{
+	if (!clk)
+		return 0;
+
+	return __clk_core_get_rate(clk->core, true);
+}
+EXPORT_SYMBOL_GPL(clk_get_rate_recalc);
 
 /**
  * clk_get_rate - return the rate of clk
