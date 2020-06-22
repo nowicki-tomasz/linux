@@ -125,4 +125,9 @@ struct vhost_scsi_target {
 /* vhost-net should add virtio_net_hdr for RX, and strip for TX packets. */
 #define VHOST_NET_F_VIRTIO_NET_HDR 27
 
+struct vfio_companion_device {
+	__u32	consumer_fd;
+	__u32	companion_index;
+};
+
 #endif

@@ -16,6 +16,7 @@
 #include <linux/types.h>
 #include <linux/uaccess.h>
 #include <linux/vfio.h>
+#include <linux/virtio_vfio.h>
 
 #include "vfio_platform_private.h"
 
@@ -269,6 +270,10 @@ static int vfio_platform_open(void *device_data)
 		if (ret < 0)
 			goto err_pm;
 
+		ret = vfio_platform_clk_init(vdev);
+		if (ret < 0)
+			goto err_rst;
+
 		ret = vfio_platform_call_reset(vdev, &extra_dbg);
 		if (ret && vdev->reset_required) {
 			dev_warn(vdev->device, "reset driver is required and reset call failed in open (%d) %s\n",
@@ -316,6 +321,7 @@ static long vfio_platform_ioctl(void *device_data,
 		info.flags = vdev->flags;
 		info.num_regions = vdev->num_regions;
 		info.num_irqs = vdev->num_irqs;
+		info.num_clks = vdev->num_clks;
 
 		return copy_to_user((void __user *)arg, &info, minsz) ?
 			-EFAULT : 0;
@@ -614,6 +620,25 @@ static int vfio_platform_mmap(void *device_data, struct vm_area_struct *vma)
 	return -EINVAL;
 }
 
+static int vfio_platofrm_handle_req(void *device_data, struct vfio_req *req)
+{
+	struct vfio_platform_device *vdev = device_data;
+	struct virtio_vfio_req_hdr *req_hdr = (struct virtio_vfio_req_hdr *)req->vq_req;
+	struct virtio_vfio_resp_status *resp;
+
+	switch (req_hdr->dev_type) {
+	case VIRTIO_VFIO_CLK_DEV_TYPE:
+		return vfio_platform_clk_handle_req(vdev, req);
+	default:
+		dev_err(vdev->device, "unsupported device type\n");
+
+		/* Skip buffer space */
+		resp = (struct virtio_vfio_resp_status *)(req->vq_resp + req_hdr->resp_len - sizeof(*resp));
+		resp->status = VIRTIO_VFIO_S_UNSUPP;
+		return -ENOSYS;
+	}
+}
+
 static const struct vfio_device_ops vfio_platform_ops = {
 	.name		= "vfio-platform",
 	.open		= vfio_platform_open,
@@ -622,6 +647,7 @@ static const struct vfio_device_ops vfio_platform_ops = {
 	.read		= vfio_platform_read,
 	.write		= vfio_platform_write,
 	.mmap		= vfio_platform_mmap,
+	.handle_req     = vfio_platofrm_handle_req,
 };
 
 static int vfio_platform_of_probe(struct vfio_platform_device *vdev,

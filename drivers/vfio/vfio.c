@@ -998,6 +998,20 @@ void *vfio_del_group_dev(struct device *dev)
 }
 EXPORT_SYMBOL_GPL(vfio_del_group_dev);
 
+int vfio_handle_req(struct vfio_req *req)
+{
+	struct vfio_device *dev = req->vdev;
+
+	if (unlikely(!dev))
+			return -EINVAL;
+
+	if (unlikely(!dev->ops->handle_req))
+		return -EINVAL;
+
+	return dev->ops->handle_req(dev->device_data, req);
+}
+EXPORT_SYMBOL_GPL(vfio_handle_req);
+
 /**
  * VFIO base fd, /dev/vfio/vfio
  */

@@ -13,7 +13,19 @@
 #include <linux/mm.h>
 #include <linux/workqueue.h>
 #include <linux/poll.h>
+#include <linux/uio.h>
 #include <uapi/linux/vfio.h>
+#include <uapi/linux/virtio_vfio.h>
+
+struct vfio_req {
+	struct vfio_device *vdev;
+	unsigned int index;
+	uint8_t vq_req[VIRTIO_VFIO_MAX_BUF_SIZE];
+	uint8_t vq_resp[VIRTIO_VFIO_MAX_BUF_SIZE];
+	struct iov_iter resp_iov_iter;
+};
+
+extern int vfio_handle_req(struct vfio_req *req);
 
 /**
  * struct vfio_device_ops - VFIO bus driver device callbacks
@@ -39,6 +51,7 @@ struct vfio_device_ops {
 			 unsigned long arg);
 	int	(*mmap)(void *device_data, struct vm_area_struct *vma);
 	void	(*request)(void *device_data, unsigned int count);
+	int	(*handle_req)(void *device_data, struct vfio_req *req);
 };
 
 extern struct iommu_group *vfio_iommu_group_get(struct device *dev);
