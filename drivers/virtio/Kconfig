@@ -110,4 +110,9 @@ config VIRTIO_WL
 
 	 If unsure, say 'N'.
 
+config VIRTIO_TRANSPORT
+	bool
+	help
+	  Virtio based transport layer library.
+
 endif # VIRTIO_MENU
