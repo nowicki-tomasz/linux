@@ -95,4 +95,9 @@ config VIRTIO_MMIO_CMDLINE_DEVICES
 
 	 If unsure, say 'N'.
 
+config VIRTIO_TRANSPORT
+	bool
+	help
+	  Virtio based transport layer library.
+
 endif # VIRTIO_MENU
