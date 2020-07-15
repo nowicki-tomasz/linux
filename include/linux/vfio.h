@@ -15,6 +15,7 @@
 #include <linux/poll.h>
 #include <uapi/linux/vfio.h>
 
+struct vfio_vhost_req;
 struct vfio_vhost_info;
 /**
  * struct vfio_device_ops - VFIO bus driver device callbacks
@@ -40,6 +41,7 @@ struct vfio_device_ops {
 			 unsigned long arg);
 	int	(*mmap)(void *device_data, struct vm_area_struct *vma);
 	void	(*request)(void *device_data, unsigned int count);
+	int	(*vhost_req)(void *device_data, struct vfio_vhost_req *req);
 	int	(*vhost_register)(void *device_data,
 				  struct vfio_vhost_info *info);
 };
@@ -201,6 +203,13 @@ extern void vfio_virqfd_disable(struct virqfd **pvirqfd);
 /*
  * VFIO VHOST
  */
+#define VFIO_VHOST_MAX_BUF_SIZE	(1024 * 64)
+struct vfio_vhost_req {
+	unsigned int dev_idx;
+	uint8_t vq_req[VFIO_VHOST_MAX_BUF_SIZE];
+	uint8_t vq_resp[VFIO_VHOST_MAX_BUF_SIZE];
+};
+
 struct vhost_dev;
 struct vfio_vhost_info {
 	bool			add;
@@ -209,6 +218,8 @@ struct vfio_vhost_info {
 	unsigned int		vhost_dev_index;
 };
 
+extern int vfio_vhost_req(struct vfio_device *device,
+			  struct vfio_vhost_req *req);
 extern int vfio_vhost_register(struct vfio_device *device,
 			       struct vfio_vhost_info *info);
 
