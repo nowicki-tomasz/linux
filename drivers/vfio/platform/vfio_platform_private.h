@@ -99,11 +99,15 @@ extern int vfio_platform_set_irqs_ioctl(struct vfio_platform_device *vdev,
 					unsigned start, unsigned count,
 					void *data);
 
+struct vfio_vhost_req;
 extern int vfio_platform_clk_init(struct vfio_platform_device *vdev);
 extern void vfio_platform_clk_cleanup(struct vfio_platform_device *vdev);
 extern int vfio_platform_clk_register_vhost(struct vfio_platform_device *vdev,
 					    struct vhost_dev *dev,
 					    int index, bool add);
+extern int vfio_platform_clk_handle_req(struct vfio_platform_device *vdev,
+					struct vfio_vhost_req *req);
+
 extern void __vfio_platform_register_reset(struct vfio_platform_reset_node *n);
 extern void vfio_platform_unregister_reset(const char *compat,
 					   vfio_platform_reset_fn_t fn);
