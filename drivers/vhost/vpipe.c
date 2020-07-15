@@ -491,8 +491,120 @@ static long vhost_pipe_ioctl(struct file *f, unsigned int ioctl,
 	}
 }
 
+static struct vfio_vhost_req *vhost_pipe_alloc_req(struct vhost_virtqueue *vq,
+					     unsigned int out, unsigned int in)
+{
+	struct vhost_vfio *vv = container_of(vq->dev, struct vhost_vfio, dev);
+	struct iov_iter out_iov_iter;
+	size_t out_len, in_len, sz;
+	size_t min_out, min_in;
+	struct vfio_vhost_req *req;
+
+	if (!in) {
+		vq_err(vq, "Expected non-zero input buffers\n");
+		return NULL;
+	}
+
+	out_len = iov_length(vq->iov, out);
+	in_len = iov_length(&vq->iov[out], in);
+	min_out = sizeof(struct virtio_vfio_req_hdr);
+	min_in = sizeof(struct virtio_vfio_resp_status);
+	if ((out_len < min_out || out_len > VFIO_VHOST_MAX_BUF_SIZE) ||
+	    (in_len < min_in || in_len > VFIO_VHOST_MAX_BUF_SIZE)) {
+		return NULL;
+	}
+
+	req = kzalloc(sizeof(*req), GFP_KERNEL);
+	if (!req)
+		return NULL;
+
+	iov_iter_init(&out_iov_iter, WRITE, vq->iov, out, out_len);
+	sz = copy_from_iter(&req->vq_req, out_len, &out_iov_iter);
+	if (sz != out_len) {
+		vq_err(vq, "Expected %zu bytes for request, got %zu bytes\n",
+		       out_len, sz);
+		kfree(req);
+		return NULL;
+	}
+
+	req->dev_idx = vv->info.vhost_dev_index;
+	return req;
+}
+
+static void vhost_pipe_respond(struct vfio_vhost_req *req,
+			       struct vhost_virtqueue *vq, unsigned int out,
+			       unsigned int in)
+{
+	struct virtio_vfio_req *vq_req = (struct virtio_vfio_req *)req->vq_req;
+	struct iov_iter in_iov_iter;
+	size_t in_len, sz;
+
+	in_len = iov_length(&vq->iov[out], in);
+	iov_iter_init(&in_iov_iter, READ, &vq->iov[out], in, in_len);
+	if (WARN_ON(unlikely(in_len < vq_req->hdr.resp_len)))
+		vq_err(vq, "No enough space for response\n");
+
+	sz = copy_to_iter(req->vq_resp, vq_req->hdr.resp_len, &in_iov_iter);
+	if (WARN_ON(unlikely(sz != vq_req->hdr.resp_len)))
+		vq_err(vq, "Faulted on copy in status\n");
+	kfree(req);
+}
+
+static void vhost_pipe_handle_req(struct vhost_vfio *vv,
+				   struct vhost_virtqueue *vq)
+{
+	unsigned int out = 0, in = 0;
+	struct vfio_vhost_req *vfio_req;
+	int head, c = 0, ret;
+
+	mutex_lock(&vq->mutex);
+
+	if (!vq->private_data)
+		goto out;
+
+	vhost_disable_notify(&vv->dev, vq);
+
+	do {
+		head = vhost_get_vq_desc(vq, vq->iov,
+					 ARRAY_SIZE(vq->iov), &out, &in,
+					 NULL, NULL);
+		if (unlikely(head < 0))
+			break;
+
+		if (head == vq->num) {
+			if (unlikely(vhost_enable_notify(&vv->dev, vq))) {
+				vhost_disable_notify(&vv->dev, vq);
+				continue;
+			}
+			break;
+		}
+
+		vfio_req = vhost_pipe_alloc_req(vq, out, in);
+		if (!vfio_req) {
+			vq_err(vq, "Faulted on request allocation\n");
+			continue;
+		}
+
+		ret = vfio_vhost_req(vv->vfio_dev_consumer, vfio_req);
+		if (ret) {
+			vq_err(vq, "Request handling error %d\n", ret);
+		}
+
+		vhost_pipe_respond(vfio_req, vq, out, in);
+		vhost_add_used_and_signal(&vv->dev, vq, head, 0);
+	} while (likely(!vhost_exceeds_weight(vq, ++c, 0)));
+
+out:
+	mutex_unlock(&vq->mutex);
+}
+
 static void handle_rqst_kick(struct vhost_work *work)
 {
+	struct vhost_virtqueue *vq = container_of(work, struct vhost_virtqueue,
+						  poll.work);
+	struct vhost_vfio *vv = container_of(vq->dev, struct vhost_vfio, dev);
+
+	vhost_pipe_handle_req(vv, vq);
 }
 
 static int vhost_pipe_open(struct inode *inode, struct file *f)
