@@ -621,6 +621,22 @@ static int vfio_platform_mmap(void *device_data, struct vm_area_struct *vma)
 	return -EINVAL;
 }
 
+static int vfio_platform_vhost_register(void *device_data,
+					struct vfio_vhost_info *info)
+{
+	struct vfio_platform_device *vdev = device_data;
+
+	switch (info->vhost_dev_type) {
+	case VIRTIO_ID_CLK:
+		return vfio_platform_clk_register_vhost(vdev, info->vhost,
+							info->vhost_dev_index,
+							info->add);
+	default:
+		dev_err(vdev->device, "unsupported device type\n");
+		return -ENOSYS;
+	}
+}
+
 static const struct vfio_device_ops vfio_platform_ops = {
 	.name		= "vfio-platform",
 	.open		= vfio_platform_open,
@@ -629,6 +645,7 @@ static const struct vfio_device_ops vfio_platform_ops = {
 	.read		= vfio_platform_read,
 	.write		= vfio_platform_write,
 	.mmap		= vfio_platform_mmap,
+	.vhost_register	= vfio_platform_vhost_register,
 };
 
 static int vfio_platform_of_probe(struct vfio_platform_device *vdev,

@@ -26,7 +26,51 @@ int vfio_platform_clk_init(struct vfio_platform_device *vdev)
 		return ret;
 	}
 	clk_res->num_clks = ret;
+
+	if (!clk_res->num_clks)
+		return 0;
+
+	clk_res->vdev = devm_kcalloc(dev, clk_res->num_clks,
+				     sizeof(clk_res->vdev), GFP_KERNEL);
+	if (!clk_res->vdev)
+		return -ENOMEM;
+
 	return 0;
+}
+
+static int vfio_platform_clk_add(struct vfio_platform_device *vdev,
+				 struct vhost_dev *vhost, int index)
+{
+	struct clk_devres *clk_res = &vdev->clk_res;
+
+	clk_res->vdev[index] = vhost;
+	return 0;
+}
+
+static int vfio_platform_clk_del(struct vfio_platform_device *vdev,
+				 struct vhost_dev *vhost, int index)
+{
+	struct clk_devres *clk_res = &vdev->clk_res;
+
+	clk_res->vdev[index] = NULL;
+	return 0;
+}
+
+int vfio_platform_clk_register_vhost(struct vfio_platform_device *vdev,
+				     struct vhost_dev *vhost, int index,
+				     bool add)
+{
+	struct clk_devres *clk_res = &vdev->clk_res;
+	struct device *dev = vdev->device;
+
+	if (index > clk_res->num_clks - 1) {
+		dev_err(dev, "Index out of range (index %d > max %d)\n",
+			index, clk_res->num_clks - 1);
+		return -EINVAL;
+	}
+
+	return add ? vfio_platform_clk_add(vdev, vhost, index) :
+		     vfio_platform_clk_del(vdev, vhost, index);
 }
 
 void vfio_platform_clk_cleanup(struct vfio_platform_device *vdev)
