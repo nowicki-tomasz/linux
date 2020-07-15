@@ -1009,6 +1009,16 @@ int vfio_vhost_register(struct vfio_device *device,
 }
 EXPORT_SYMBOL_GPL(vfio_vhost_register);
 
+int vfio_vhost_req(struct vfio_device *device, struct vfio_vhost_req *req)
+{
+
+	if (unlikely(!device || !device->ops->vhost_req))
+		return -EINVAL;
+
+	return device->ops->vhost_req(device->device_data, req);
+}
+EXPORT_SYMBOL_GPL(vfio_vhost_req);
+
 /**
  * VFIO base fd, /dev/vfio/vfio
  */
