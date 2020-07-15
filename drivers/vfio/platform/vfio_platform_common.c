@@ -234,6 +234,8 @@ static void vfio_platform_release(void *device_data)
 				 ret, extra_dbg ? extra_dbg : "");
 			WARN_ON(1);
 		}
+
+		vfio_platform_clk_cleanup(vdev);
 		pm_runtime_put(vdev->device);
 		vfio_platform_regions_cleanup(vdev);
 		vfio_platform_irq_cleanup(vdev);
@@ -269,6 +271,10 @@ static int vfio_platform_open(void *device_data)
 		if (ret < 0)
 			goto err_pm;
 
+		ret = vfio_platform_clk_init(vdev);
+		if (ret < 0)
+			goto err_rst;
+
 		ret = vfio_platform_call_reset(vdev, &extra_dbg);
 		if (ret && vdev->reset_required) {
 			dev_warn(vdev->device, "reset driver is required and reset call failed in open (%d) %s\n",
@@ -303,7 +309,7 @@ static long vfio_platform_ioctl(void *device_data,
 	if (cmd == VFIO_DEVICE_GET_INFO) {
 		struct vfio_device_info info;
 
-		minsz = offsetofend(struct vfio_device_info, num_irqs);
+		minsz = offsetofend(struct vfio_device_info, num_clks);
 
 		if (copy_from_user(&info, (void __user *)arg, minsz))
 			return -EFAULT;
@@ -316,6 +322,7 @@ static long vfio_platform_ioctl(void *device_data,
 		info.flags = vdev->flags;
 		info.num_regions = vdev->num_regions;
 		info.num_irqs = vdev->num_irqs;
+		info.num_clks = vdev->clk_res.num_clks;
 
 		return copy_to_user((void __user *)arg, &info, minsz) ?
 			-EFAULT : 0;
