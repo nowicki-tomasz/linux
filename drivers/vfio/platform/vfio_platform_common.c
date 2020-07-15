@@ -16,6 +16,10 @@
 #include <linux/types.h>
 #include <linux/uaccess.h>
 #include <linux/vfio.h>
+#include <linux/vhost_types.h>
+#include <linux/virtio_vfio.h>
+
+#include <uapi/linux/virtio_ids.h>
 
 #include "vfio_platform_private.h"
 
@@ -621,6 +625,28 @@ static int vfio_platform_mmap(void *device_data, struct vm_area_struct *vma)
 	return -EINVAL;
 }
 
+static int vfio_platofrm_vhost_req(void *device_data,
+				   struct vfio_vhost_req *req)
+{
+	struct vfio_platform_device *vdev = device_data;
+	struct virtio_vfio_req_hdr *req_hdr =
+				(struct virtio_vfio_req_hdr *)req->vq_req;
+	struct virtio_vfio_resp_status *resp;
+
+	switch (req_hdr->dev_type) {
+	case VIRTIO_ID_CLK:
+		return vfio_platform_clk_handle_req(vdev, req);
+	default:
+		dev_err(vdev->device, "unsupported device type\n");
+
+		/* Skip buffer space */
+		resp = (struct virtio_vfio_resp_status *)(req->vq_resp +
+				req_hdr->resp_len - sizeof(*resp));
+		resp->status = VIRTIO_VFIO_S_UNSUPP;
+		return -ENOSYS;
+	}
+}
+
 static int vfio_platofrm_vhost_register(void *device_data,
 					struct vfio_vhost_info *info)
 {
@@ -645,6 +671,7 @@ static const struct vfio_device_ops vfio_platform_ops = {
 	.read		= vfio_platform_read,
 	.write		= vfio_platform_write,
 	.mmap		= vfio_platform_mmap,
+	.vhost_req	= vfio_platofrm_vhost_req,
 	.vhost_register	= vfio_platofrm_vhost_register,
 };
 
