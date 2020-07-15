@@ -34,6 +34,16 @@ config VHOST_VSOCK
 	To compile this driver as a module, choose M here: the module will be called
 	vhost_vsock.
 
+config VHOST_VFIO
+	bool "vhost VFIO driver"
+	depends on IOMMU_SUPPORT && EVENTFD
+	select VHOST
+	default n
+	---help---
+	  VHOST-based configuration medium for devices which are directly
+	  assigned to virtual machine and needs other host devices help
+	  to work properly like clock, PHY etc.
+
 config VHOST
 	tristate
 	---help---
