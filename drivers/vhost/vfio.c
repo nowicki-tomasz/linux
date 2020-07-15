@@ -159,6 +159,86 @@ out:
 
 static void vhost_vfio_event_work(struct vhost_work *work)
 {
+static int vhost_vfio_start(struct vhost_vfio *vv)
+{
+	struct vhost_virtqueue *vq;
+	struct vfio_vhost_info info;
+	size_t i;
+	int ret;
+
+	mutex_lock(&vv->dev.mutex);
+
+	ret = vhost_dev_check_owner(&vv->dev);
+	if (ret)
+		goto err;
+
+	for (i = 0; i < ARRAY_SIZE(vv->vqs); i++) {
+		vq = &vv->vqs[i];
+
+		mutex_lock(&vq->mutex);
+
+		if (!vhost_vq_access_ok(vq)) {
+			ret = -EFAULT;
+			goto err_vq;
+		}
+
+		if (!vq->private_data) {
+			vq->private_data = vv;
+			ret = vhost_vq_init_access(vq);
+			if (ret)
+				goto err_vq;
+		}
+
+		mutex_unlock(&vq->mutex);
+	}
+
+	info.vhost = &vv->dev;
+	info.vhost_dev_index = vv->info.vhost_dev_index;
+	info.vhost_dev_type = vv->info.vhost_dev_type;
+	info.add = true;
+	vfio_vhost_register(vv->vfio_dev_consumer, &info);
+	mutex_unlock(&vv->dev.mutex);
+	return 0;
+
+err_vq:
+	vq->private_data = NULL;
+	mutex_unlock(&vq->mutex);
+
+	for (i = 0; i < ARRAY_SIZE(vv->vqs); i++) {
+		vq = &vv->vqs[i];
+
+		mutex_lock(&vq->mutex);
+		vq->private_data = NULL;
+		mutex_unlock(&vq->mutex);
+	}
+err:
+	mutex_unlock(&vv->dev.mutex);
+	return ret;
+}
+
+static int vhost_vfio_stop(struct vhost_vfio *vv)
+{
+	struct vfio_vhost_info info;
+	int ret, i;
+
+	mutex_lock(&vv->dev.mutex);
+
+	ret = vhost_dev_check_owner(&vv->dev);
+	if (ret)
+		goto err;
+
+	info.vhost = &vv->dev;
+	info.vhost_dev_index = vv->info.vhost_dev_index;
+	info.vhost_dev_type = vv->info.vhost_dev_type;
+	info.add = false;
+	vfio_vhost_register(vv->vfio_dev_consumer, &info);
+
+	for (i = 0; i < ARRAY_SIZE(vv->vqs); i++)
+		__vhost_vfio_stop(&vv->vqs[i]);
+
+err:
+	mutex_unlock(&vv->dev.mutex);
+	return ret;
 }
 
 static long vhost_vfio_ioctl(struct file *f, unsigned int ioctl,
@@ -186,6 +266,13 @@ static long vhost_vfio_ioctl(struct file *f, unsigned int ioctl,
 		return vhost_vfio_set_owner(vv);
 	case VHOST_VFIO_SET_FD:
 		return vhost_vfio_set_fd(vv, argp);
+	case VHOST_VFIO_SET_RUNNING:
+		if (copy_from_user(&start, argp, sizeof(start)))
+			return -EFAULT;
+		if (start)
+			return vhost_vfio_start(vv);
+		else
+			return vhost_vfio_stop(vv);
 	default:
 		mutex_lock(&vv->dev.mutex);
 		r = vhost_dev_ioctl(&vv->dev, ioctl, argp);

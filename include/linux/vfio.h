@@ -15,6 +15,7 @@
 #include <linux/poll.h>
 #include <uapi/linux/vfio.h>
 
+struct vfio_vhost_info;
 /**
  * struct vfio_device_ops - VFIO bus driver device callbacks
  *
@@ -39,6 +40,8 @@ struct vfio_device_ops {
 			 unsigned long arg);
 	int	(*mmap)(void *device_data, struct vm_area_struct *vma);
 	void	(*request)(void *device_data, unsigned int count);
+	int	(*vhost_register)(void *device_data,
+				  struct vfio_vhost_info *info);
 };
 
 extern struct iommu_group *vfio_iommu_group_get(struct device *dev);
@@ -194,5 +197,19 @@ extern int vfio_virqfd_enable(void *opaque,
 			      void (*thread)(void *, void *),
 			      void *data, struct virqfd **pvirqfd, int fd);
 extern void vfio_virqfd_disable(struct virqfd **pvirqfd);
+
+/*
+ * VFIO VHOST
+ */
+struct vhost_dev;
+struct vfio_vhost_info {
+	bool			add;
+	struct vhost_dev	*vhost;
+	unsigned int		vhost_dev_type;
+	unsigned int		vhost_dev_index;
+};
+
+extern int vfio_vhost_register(struct vfio_device *device,
+			       struct vfio_vhost_info *info);
 
 #endif /* VFIO_H */
