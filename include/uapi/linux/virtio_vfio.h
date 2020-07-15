@@ -7,6 +7,8 @@
 #ifndef _UAPI_LINUX_VIRTIO_VFIO_H
 #define _UAPI_LINUX_VIRTIO_VFIO_H
 
+#include <linux/types.h>
+
 /* Status types */
 #define VIRTIO_VFIO_S_OK		0x00
 #define VIRTIO_VFIO_S_IOERR		0x01
@@ -15,5 +17,73 @@
 #define VIRTIO_VFIO_S_INVAL		0x04
 #define VIRTIO_VFIO_S_RANGE		0x05
 #define VIRTIO_VFIO_S_NOENT		0x06
+
+struct virtio_vfio_req_hdr {
+	__le32				dev_type;
+	__u8				req_type;
+	__u8				reserved[3];
+	__le32				req_len;
+	__le32				resp_len;
+} __attribute__((packed));
+
+struct virtio_vfio_req {
+	struct virtio_vfio_req_hdr	hdr;
+	__u8				buf[];
+} __attribute__((packed));
+
+struct virtio_vfio_resp_status {
+	__u8				status;
+	__u8				reserved[3];
+} __attribute__((packed));
+
+/* Clocks */
+
+/* Clock request types */
+#define VIRTIO_VFIO_REQ_CLK_PREPARE		0x01
+#define VIRTIO_VFIO_REQ_CLK_ENABLE		0x02
+#define VIRTIO_VFIO_REQ_CLK_UNPREPARE		0x03
+#define VIRTIO_VFIO_REQ_CLK_DISABLE		0x04
+#define VIRTIO_VFIO_REQ_CLK_SET_RATE		0x05
+#define VIRTIO_VFIO_REQ_CLK_RECALC_RATE		0x06
+#define VIRTIO_VFIO_REQ_CLK_GET_FLAGS		0x07
+
+struct virtio_vfio_clk_prepare {
+	struct virtio_vfio_req_hdr	hdr;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_clk_unprepare {
+	struct virtio_vfio_req_hdr	hdr;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_clk_enable {
+	struct virtio_vfio_req_hdr	hdr;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_clk_disable {
+	struct virtio_vfio_req_hdr	hdr;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_clk_rate {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				parent_rate;
+	__le64				rate;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_clk_flags {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				flags;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_clk_event {
+	unsigned long			msg;
+	unsigned long			old_rate;
+	unsigned long			new_rate;
+} __attribute__((packed));
 
 #endif
