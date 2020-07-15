@@ -623,6 +623,23 @@ void devm_clk_put(struct device *dev, struct clk *clk);
 long clk_round_rate(struct clk *clk, unsigned long rate);
 
 /**
+ * clk_notify - call clk notifier chain
+ * @clk: clock source
+ * @msg: clk notifier type (see include/linux/clk.h)
+ * @old_rate: old clk rate
+ * @new_rate: new clk rate
+ *
+ * Triggers a notifier call chain on the clk rate-change notification
+ * for 'clk'.  Passes a pointer to the struct clk and the previous
+ * and current rates to the notifier callback.  Intended to be called by
+ * internal clock code only.  Returns NOTIFY_DONE from the last driver
+ * called if all went well, or NOTIFY_STOP or NOTIFY_BAD immediately if
+ * a driver returns that.
+ */
+int clk_notify(struct clk *clk, unsigned long msg,
+	       unsigned long old_rate, unsigned long new_rate);
+
+/**
  * clk_set_rate - set the clock rate for a clock source
  * @clk: clock source
  * @rate: desired clock rate in Hz
@@ -850,6 +867,12 @@ static inline int clk_set_rate_exclusive(struct clk *clk, unsigned long rate)
 }
 
 static inline long clk_round_rate(struct clk *clk, unsigned long rate)
+{
+	return 0;
+}
+
+int clk_notify(struct clk *clk, unsigned long msg,
+	       unsigned long old_rate, unsigned long new_rate)
 {
 	return 0;
 }
