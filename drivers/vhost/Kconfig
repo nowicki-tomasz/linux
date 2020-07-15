@@ -34,6 +34,15 @@ config VHOST_VSOCK
 	To compile this driver as a module, choose M here: the module will be called
 	vhost_vsock.
 
+config VHOST_PIPE
+	bool "vhost PIPE driver"
+	select VHOST
+	default n
+	---help---
+	  VHOST-based medium which forward requests from Virtio alike devices
+	  (clock, PHY etc.) to host backend that supposed to handle requests.
+	  Also, it allows to send notification messages in the reverse direction. 
+
 config VHOST
 	tristate
 	---help---
