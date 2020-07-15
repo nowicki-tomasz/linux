@@ -60,6 +60,7 @@ struct vfio_platform_device {
 	struct module			*reset_module;
 	struct device			*device;
 	struct clk_devres		clk_res;
+	struct notifier_block		clk_nb;
 
 	/*
 	 * These fields should be filled by the bus specific binder
