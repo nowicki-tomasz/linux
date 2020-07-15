@@ -1455,20 +1455,6 @@ long clk_round_rate(struct clk *clk, unsigned long rate)
 }
 EXPORT_SYMBOL_GPL(clk_round_rate);
 
-/**
- * __clk_notify - call clk notifier chain
- * @core: clk that is changing rate
- * @msg: clk notifier type (see include/linux/clk.h)
- * @old_rate: old clk rate
- * @new_rate: new clk rate
- *
- * Triggers a notifier call chain on the clk rate-change notification
- * for 'clk'.  Passes a pointer to the struct clk and the previous
- * and current rates to the notifier callback.  Intended to be called by
- * internal clock code only.  Returns NOTIFY_DONE from the last driver
- * called if all went well, or NOTIFY_STOP or NOTIFY_BAD immediately if
- * a driver returns that.
- */
 static int __clk_notify(struct clk_core *core, unsigned long msg,
 		unsigned long old_rate, unsigned long new_rate)
 {
@@ -1491,6 +1477,30 @@ static int __clk_notify(struct clk_core *core, unsigned long msg,
 
 	return ret;
 }
+
+/**
+ * clk_notify - call clk notifier chain
+ * @core: clk that is changing rate
+ * @msg: clk notifier type (see include/linux/clk.h)
+ * @old_rate: old clk rate
+ * @new_rate: new clk rate
+ *
+ * Triggers a notifier call chain on the clk rate-change notification
+ * for 'clk'.  Passes a pointer to the struct clk and the previous
+ * and current rates to the notifier callback.  Intended to be called by
+ * internal clock code only.  Returns NOTIFY_DONE from the last driver
+ * called if all went well, or NOTIFY_STOP or NOTIFY_BAD immediately if
+ * a driver returns that.
+ */
+int clk_notify(struct clk *clk, unsigned long msg,
+	       unsigned long old_rate, unsigned long new_rate)
+{
+	if (clk->core->notifier_count)
+		return __clk_notify(clk->core, msg, old_rate, new_rate);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(clk_notify);
 
 /**
  * __clk_recalc_accuracies
