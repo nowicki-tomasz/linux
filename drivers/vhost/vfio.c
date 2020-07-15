@@ -43,8 +43,22 @@ struct vhost_vfio {
 	struct vhost_dev	dev;
 	struct vhost_virtqueue	vqs[VHOST_VFIO_VQ_MAX];
 
+	struct vhost_work	evt_work;
+	spinlock_t		evt_list_lock;
+	struct list_head	evt_list;
+	int			evt_head;
+	struct iov_iter		evt_iov_iter;
+	ssize_t			evt_size;
+	uint32_t		evt_status;
+
 	struct vfio_device	*vfio_dev_consumer;
 	struct vhost_vfio_dev_info info;
+};
+
+struct vhost_vfio_evt {
+	struct list_head	list;
+	void			*buf;
+	u32			size;
 };
 
 static void vhost_vfio_flush(struct vhost_vfio *vv)
@@ -157,8 +171,196 @@ out:
 	return r;
 }
 
+static int __vhost_vfio_get_one_evt(struct vhost_vfio *vv)
+{
+	struct vhost_virtqueue *vq = &vv->vqs[VHOST_VFIO_VQ_EVENT];
+	int ret = 0, count = 0;
+
+	while (true) {
+		struct iov_iter status_iov_iter;
+		ssize_t status_sz, sz;
+		unsigned out, in;
+		int head;
+
+		head = vhost_get_vq_desc(vq, vq->iov, ARRAY_SIZE(vq->iov),
+					 &out, &in, NULL, NULL);
+		if (head < 0) {
+			vq_err(vq, "Failed to obtain head, err %d\n", head);
+			ret = head;
+			break;
+		}
+
+		/*
+		 * No available descriptor means that guest is processing
+		 * the event
+		 */
+		if (head == vq->num) {
+			if (count > 0)
+				break;
+
+			continue;
+		}
+
+		/* Out buffer will be used for subsequent host to guest event
+		 * but in buffer contain current event status.
+		 *  */
+		vv->evt_head = head;
+		vv->evt_size = iov_length(&vq->iov[out], in);
+		iov_iter_init(&vv->evt_iov_iter, READ, &vq->iov[out], in,
+			      vv->evt_size);
+
+		status_sz = iov_length(vq->iov, out);
+		iov_iter_init(&status_iov_iter, WRITE, vq->iov, out, status_sz);
+		sz = copy_from_iter(&vv->evt_status, sizeof(vv->evt_status),
+				    &status_iov_iter);
+		if (sz != sizeof(vv->evt_status)) {
+			vq_err(vq, "Expected %zu bytes for event status, got %zu bytes\n",
+			       sizeof(vv->evt_status), sz);
+		}
+
+		count++;
+	}
+
+	/* More than one descriptor is illegal */
+	ret = count != 1 ? -EINVAL : ret;
+	if (ret)
+		vv->evt_size = 0;
+
+	return ret;
+}
+
+static int vhost_vfio_get_one_evt(struct vhost_vfio *vv)
+{
+	struct vhost_virtqueue *vq = &vv->vqs[VHOST_VFIO_VQ_EVENT];
+	struct vhost_dev *dev = &vv->dev;
+	int ret;
+
+	mutex_lock(&vq->mutex);
+
+	if (!vq->private_data) {
+		mutex_unlock(&vq->mutex);
+		return 0;
+	}
+
+	/* Avoid further vmexits, we're already processing the virtqueue */
+	vhost_disable_notify(dev, vq);
+
+	ret = __vhost_vfio_get_one_evt(vv);
+
+	vhost_enable_notify(dev, vq);
+	mutex_unlock(&vq->mutex);
+	return ret;
+}
+
+/*
+ * In order to have synchronous host to guest event notification
+ * we ever expect to manage only one descriptor at a time which means that
+ * guest prepares only one descriptor upfront and refill when receive an event.
+ * 1. Guest push one desc which conveys in and out buf
+ * 2. Host fills event info into the in buf and sends to guest
+ * 3. Guest consumes event and refill queue with new desc
+ * 4. At the same time guest updates prev operation status into the out buffer
+ * 5. Host polls for available desc and read the status from out buf
+ * 6. The same desc and its in buf  will be used for subsequent event
+ *
+ * Send an event and wait for it to complete. Return the event status.
+ */
+static int vhost_vfio_do_send_one_evt(struct vhost_vfio *vv,
+				      struct vhost_virtqueue *vq)
+{
+	struct vhost_dev *dev = &vv->dev;
+	struct vhost_vfio_evt *evt;
+	size_t nbytes;
+	int ret;
+
+	mutex_lock(&vq->mutex);
+
+	if (!vq->private_data) {
+		mutex_unlock(&vq->mutex);
+		return 0;
+	}
+
+	/* Avoid further vmexits, we're already processing the virtqueue */
+	vhost_disable_notify(dev, vq);
+
+	spin_lock(&vv->evt_list_lock);
+	/* Expect only one event to send */
+	if (WARN_ON(list_empty(&vv->evt_list) ||
+		    !list_is_singular(&vv->evt_list))) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	evt = list_first_entry(&vv->evt_list,
+			       struct vhost_vfio_evt, list);
+	if (vv->evt_size < evt->size) {
+		vq_err(vq, "Buffer len [%zu] too small\n", vv->evt_size);
+		ret = -EINVAL;
+		goto out;
+	}
+
+	nbytes = copy_to_iter(evt->buf, evt->size, &vv->evt_iov_iter);
+	if (nbytes != evt->size) {
+		vq_err(vq, "Faulted on copying event\n");
+		ret = -EINVAL;
+		goto out;
+	}
+
+	vhost_add_used_and_signal(dev, vq, vv->evt_head, evt->size);
+
+	/* Wait until guest refill */
+	ret = __vhost_vfio_get_one_evt(vv);
+	if (ret)
+		goto out;
+
+	list_del_init(&evt->list);
+out:
+	spin_unlock(&vv->evt_list_lock);
+	vhost_enable_notify(&vv->dev, vq);
+	mutex_unlock(&vq->mutex);
+	return ret;
+}
+
 static void vhost_vfio_event_work(struct vhost_work *work)
 {
+	struct vhost_virtqueue *vq;
+	struct vhost_vfio *vv;
+
+	vv = container_of(work, struct vhost_vfio, evt_work);
+	vq = &vv->vqs[VHOST_VFIO_VQ_EVENT];
+
+	vhost_vfio_do_send_one_evt(vv, vq);
+}
+
+int vhost_vfio_send_evt(struct vhost_dev *dev, void *buf, ssize_t size)
+{
+	struct vhost_vfio *vv = container_of(dev, struct vhost_vfio, dev);
+	struct vhost_vfio_evt *evt;
+
+	/* We can't send event to ourself, this leads to deadlock */
+	if (!vhost_dev_check_owner(dev))
+		return 0;
+
+	evt = kzalloc(sizeof(*evt), GFP_KERNEL);
+	if (!evt)
+		return -ENOMEM;
+
+	evt->buf = buf;
+	evt->size = size;
+
+	spin_lock(&vv->evt_list_lock);
+	list_add_tail(&evt->list, &vv->evt_list);
+	spin_unlock(&vv->evt_list_lock);
+
+	vhost_work_queue(&vv->dev, &vv->evt_work);
+
+	while (!list_empty(&vv->evt_list))
+		cpu_relax();
+
+	kfree(evt);
+	return vv->evt_status;
+}
+
 static int vhost_vfio_start(struct vhost_vfio *vv)
 {
 	struct vhost_virtqueue *vq;
@@ -191,6 +393,10 @@ static int vhost_vfio_start(struct vhost_vfio *vv)
 
 		mutex_unlock(&vq->mutex);
 	}
+
+	ret = vhost_vfio_get_one_evt(vv);
+	if (ret)
+		goto err;
 
 	info.vhost = &vv->dev;
 	info.vhost_dev_index = vv->info.vhost_dev_index;
