@@ -119,5 +119,6 @@
 /* VHOST_VFIO specific defines */
 
 #define VHOST_VFIO_SET_FD      		_IOW(VHOST_VIRTIO, 0x80, __u32)
+#define VHOST_VFIO_SET_RUNNING		_IOW(VHOST_VIRTIO, 0x81, int)
 
 #endif
