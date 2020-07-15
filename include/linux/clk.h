@@ -537,6 +537,14 @@ void clk_disable(struct clk *clk);
 void clk_bulk_disable(int num_clks, const struct clk_bulk_data *clks);
 
 /**
+ * clk_get_rate_recalc - obtain the current clock rate (in Hz) for a clock
+ * 			 source and enforce rate to be recalculated. This is
+ * 			 only valid once the clock source has been enabled.
+ * @clk: clock source
+ */
+unsigned long clk_get_rate_recalc(struct clk *clk);
+
+/**
  * clk_get_rate - obtain the current clock rate (in Hz) for a clock source.
  *		  This is only valid once the clock source has been enabled.
  * @clk: clock source
