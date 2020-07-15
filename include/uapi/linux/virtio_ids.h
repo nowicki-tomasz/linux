@@ -48,6 +48,7 @@
 #define VIRTIO_ID_PMEM         27 /* virtio pmem */
 #define VIRTIO_ID_VIDEO_ENC    30 /* virtio video encoder */
 #define VIRTIO_ID_VIDEO_DEC    31 /* virtio video decoder */
+#define VIRTIO_ID_CLK          32 /* virtio clock */
 
 /* Chrome OS-specific devices */
 #define VIRTIO_ID_WL           63 /* virtio wayland */

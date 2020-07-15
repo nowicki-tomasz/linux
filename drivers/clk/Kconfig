@@ -305,6 +305,14 @@ config COMMON_CLK_FIXED_MMIO
 	help
 	  Support for Memory Mapped IO Fixed clocks
 
+config VIRTIO_CLK
+	bool "Virtio clock driver"
+	depends on COMMON_CLK && OF
+	depends on VIRTIO=y
+	select VIRTIO_TRANSPORT
+	help
+	  Para-virtualised clock driver with virtio medium.
+
 source "drivers/clk/actions/Kconfig"
 source "drivers/clk/analogbits/Kconfig"
 source "drivers/clk/bcm/Kconfig"
