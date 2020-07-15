@@ -249,6 +249,7 @@
 
 &cp0_sdhci0 {
 	/* U6 */
+	no-1-8-v;
 	broken-cd;
 	bus-width = <4>;
 	pinctrl-names = "default";
