@@ -1613,20 +1613,42 @@ static void __clk_recalc_rates(struct clk_core *core, unsigned long msg)
 		__clk_recalc_rates(child, msg);
 }
 
-static unsigned long clk_core_get_rate(struct clk_core *core)
+unsigned long __clk_core_get_rate(struct clk_core *core, bool force_recalc)
 {
 	unsigned long rate;
 
 	clk_prepare_lock();
 
-	if (core && (core->flags & CLK_GET_RATE_NOCACHE))
-		__clk_recalc_rates(core, 0);
+	if (core && (force_recalc || (core->flags & CLK_GET_RATE_NOCACHE)))
+		__clk_recalc_rates(core, POST_RATE_CHANGE);
 
 	rate = clk_core_get_rate_nolock(core);
 	clk_prepare_unlock();
 
 	return rate;
 }
+
+static unsigned long clk_core_get_rate(struct clk_core *core)
+{
+	return __clk_core_get_rate(core, false);
+}
+
+/**
+ * clk_get_rate_recalc - return the rate of clk after recalc_rate
+ * @clk: the clk whose rate is being returned
+ *
+ * Simply returns the rate of the clk after recalc_rate is being issued,
+ * regardless CLK_GET_RATE_NOCACHE flag.
+ * If clk is NULL then returns 0.
+ */
+unsigned long clk_get_rate_recalc(struct clk *clk)
+{
+	if (!clk)
+		return 0;
+
+	return __clk_core_get_rate(clk->core, true);
+}
+EXPORT_SYMBOL_GPL(clk_get_rate_recalc);
 
 /**
  * clk_get_rate - return the rate of clk
