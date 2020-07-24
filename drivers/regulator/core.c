@@ -1606,6 +1606,14 @@ static struct regulator *create_regulator(struct regulator_dev *rdev,
 				  dev->kobj.name, err);
 			/* non-fatal */
 		}
+
+		err = sysfs_create_link_nowarn(&dev->kobj, &rdev->dev.kobj,
+					       supply_name);
+		if (err) {
+			rdev_dbg(rdev, "could not add device link %s err %d\n",
+				  dev->kobj.name, err);
+			/* non-fatal */
+		}
 	} else {
 		regulator->supply_name = kstrdup_const(supply_name, GFP_KERNEL);
 		if (regulator->supply_name == NULL)
@@ -3063,6 +3071,12 @@ static int regulator_map_voltage(struct regulator_dev *rdev, int min_uV,
 	return regulator_map_voltage_iterate(rdev, min_uV, max_uV);
 }
 
+int regulator_get_map_voltage(struct regulator *regulator, int min_uV, int max_uV)
+{
+	return regulator_map_voltage(regulator->rdev, min_uV, max_uV);
+}
+EXPORT_SYMBOL_GPL(regulator_get_map_voltage);
+
 static int _regulator_call_set_voltage(struct regulator_dev *rdev,
 				       int min_uV, int max_uV,
 				       unsigned *selector)
@@ -4434,6 +4448,127 @@ err:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(regulator_bulk_get);
+
+static int of_regulator_get_name_length(const char *name)
+{
+	char *ptr, *ptr_end;
+	size_t len = 0;
+
+	/* Expect '*-supply' pattern */
+	ptr = strnstr(name, "-supply", strlen(name));
+	if (!ptr)
+		return -ENOENT;
+
+	/* and make sure it's NULL terminated */
+	ptr_end = ptr + strlen("-supply");
+	if (*ptr_end != '\0') {
+		len = of_regulator_get_name_length(ptr_end);
+		if (len <= 0)
+			return -ENOENT;
+	}
+
+	pr_err("%s found pattern for %s\n", __func__, name);
+
+	return ptr - name + len;
+}
+
+/**
+ * of_regulator_get_parent_count() - Count the number of regulators a device
+ *                                   node has
+ * @np: device node to count
+ *
+ * Returns: The number of regulators that are possible parents of this node
+ */
+static unsigned int of_regulator_get_parent_count(struct device_node *np)
+{
+	struct property *pp;
+	int count = 0;
+
+	for_each_property_of_node(np, pp) {
+		if (of_regulator_get_name_length(pp->name) <= 0)
+			continue;
+
+		count++;
+	}
+
+	pr_err("%s found %d regulators\n", __func__, count);
+
+	return count;
+}
+
+static int of_regulator_bulk_init(struct device *dev,
+				   struct regulator_bulk_data *consumers)
+{
+	struct device_node *np = dev_of_node(dev);
+	struct property *pp;
+	int i = 0;
+
+	for_each_property_of_node(np, pp) {
+		int name_len;
+		char *supply;
+
+		name_len = of_regulator_get_name_length(pp->name);
+		if (name_len <= 0)
+			continue;
+
+		pr_err("%s 1\n", __func__);
+
+		supply = devm_kmalloc(dev, name_len + 1, GFP_KERNEL);
+		if (!supply)
+			return -ENOMEM;
+
+		pr_err("%s 2\n", __func__);
+
+		memcpy(supply, pp->name, name_len);
+		supply[name_len] = '\0';
+
+		consumers[i++].supply = supply;
+		pr_err("%s found %s supply", __func__, consumers[i - 1].supply);
+	}
+
+	return 0;
+}
+
+int regulator_bulk_get_all(struct device *dev,
+			   struct regulator_bulk_data **consumers)
+{
+	struct device_node *np = dev_of_node(dev);
+	struct regulator_bulk_data *consumers_bulk;
+	int num_consumers;
+	int ret;
+
+	if (!np)
+		return 0;
+
+	pr_err("%s 1\n", __func__);
+
+	num_consumers = of_regulator_get_parent_count(np);
+	if (!num_consumers)
+		return 0;
+
+	pr_err("%s found %d regulators\n", __func__, num_consumers);
+
+	consumers_bulk = devm_kmalloc_array(dev, num_consumers,
+					    sizeof(*consumers_bulk),
+					    GFP_KERNEL);
+	if (!consumers_bulk)
+		return -ENOMEM;
+
+	pr_err("%s 2\n", __func__);
+
+	ret = of_regulator_bulk_init(dev, consumers_bulk);
+	if (ret)
+		return ret;
+
+	ret = regulator_bulk_get(dev, num_consumers, consumers_bulk);
+	if (ret)
+		return ret;
+
+	*consumers = consumers_bulk;
+
+	return num_consumers;
+}
+EXPORT_SYMBOL_GPL(regulator_bulk_get_all);
 
 static void regulator_bulk_enable_async(void *data, async_cookie_t cookie)
 {

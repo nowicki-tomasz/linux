@@ -227,8 +227,12 @@ int regulator_disable_deferred(struct regulator *regulator, int ms);
 
 int __must_check regulator_bulk_get(struct device *dev, int num_consumers,
 				    struct regulator_bulk_data *consumers);
+int __must_check regulator_bulk_get_all(struct device *dev,
+					struct regulator_bulk_data **consumers);
 int __must_check devm_regulator_bulk_get(struct device *dev, int num_consumers,
 					 struct regulator_bulk_data *consumers);
+int __must_check devm_regulator_bulk_get_all(struct device *dev,
+					struct regulator_bulk_data **consumers);
 int __must_check regulator_bulk_enable(int num_consumers,
 				       struct regulator_bulk_data *consumers);
 int regulator_bulk_disable(int num_consumers,
@@ -248,6 +252,8 @@ int regulator_set_voltage_time(struct regulator *regulator,
 			       int old_uV, int new_uV);
 int regulator_get_voltage(struct regulator *regulator);
 int regulator_sync_voltage(struct regulator *regulator);
+int regulator_get_map_voltage(struct regulator *regulator, int min_uV,
+			      int max_uV);
 int regulator_set_current_limit(struct regulator *regulator,
 			       int min_uA, int max_uA);
 int regulator_get_current_limit(struct regulator *regulator);
@@ -430,8 +436,20 @@ static inline int regulator_bulk_get(struct device *dev,
 	return 0;
 }
 
+static int inline regulator_bulk_get_all(struct device *dev,
+					 struct regulator_bulk_data **consumers)
+{
+	return 0;
+}
+
 static inline int devm_regulator_bulk_get(struct device *dev, int num_consumers,
 					  struct regulator_bulk_data *consumers)
+{
+	return 0;
+}
+
+static int inline devm_regulator_bulk_get_all(struct device *dev,
+					struct regulator_bulk_data **consumers)
 {
 	return 0;
 }
@@ -472,6 +490,12 @@ static inline int regulator_set_voltage_time(struct regulator *regulator,
 }
 
 static inline int regulator_get_voltage(struct regulator *regulator)
+{
+	return -EINVAL;
+}
+
+static inline int regulator_get_map_voltage(struct regulator *regulator,
+					    int min_uV, int max_uV);
 {
 	return -EINVAL;
 }
