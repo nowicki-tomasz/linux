@@ -94,4 +94,95 @@ struct virtio_vfio_clk_event {
 	unsigned long			new_rate;
 } __attribute__((packed));
 
+/* Regulators */
+
+/* Regulator request types */
+#define VIRTIO_VFIO_REQ_REGULATOR_GET_TYPE		0x01
+#define VIRTIO_VFIO_REQ_REGULATOR_GET_N_VOLTAGES	0x02
+#define VIRTIO_VFIO_REQ_REGULATOR_ENABLE		0x03
+#define VIRTIO_VFIO_REQ_REGULATOR_DISABLE		0x04
+#define VIRTIO_VFIO_REQ_REGULATOR_IS_ENABLED		0x05
+#define VIRTIO_VFIO_REQ_REGULATOR_GET_CUR_LIMIT		0x06
+#define VIRTIO_VFIO_REQ_REGULATOR_SET_CUR_LIMIT		0x07
+#define VIRTIO_VFIO_REQ_REGULATOR_LIST_VOLTAGE		0x08
+#define VIRTIO_VFIO_REQ_REGULATOR_MAP_VOLTAGE		0x09
+#define VIRTIO_VFIO_REQ_REGULATOR_GET_VOLTAGE		0x0a
+#define VIRTIO_VFIO_REQ_REGULATOR_SET_VOLTAGE		0x0b
+
+struct virtio_vfio_regulator_type {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				type;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_regulator_n_voltages {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				n_voltages;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_regulator_enable {
+	struct virtio_vfio_req_hdr	hdr;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_regulator_disable {
+	struct virtio_vfio_req_hdr	hdr;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_regulator_is_enable {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				is_enabled;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_regulator_get_cur_limit {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				cur_limit;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_regulator_set_cur_limit {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				min_uA;
+	__le64				max_uA;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_regulator_list_voltage {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				selector;
+	__le64				vol;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_regulator_map_voltage {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				min_uV;
+	__le64				max_uV;
+	__le64				selector;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_regulator_get_voltage {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				vol;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_regulator_set_voltage {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				min_uV;
+	__le64				max_uV;
+	__le64				selector;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_regulator_event {
+	unsigned long			msg;
+	unsigned long			old_vol;
+	unsigned long			new_vol;
+} __attribute__((packed));
+
 #endif
