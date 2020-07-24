@@ -166,6 +166,30 @@ int devm_regulator_bulk_get(struct device *dev, int num_consumers,
 }
 EXPORT_SYMBOL_GPL(devm_regulator_bulk_get);
 
+int devm_regulator_bulk_get_all(struct device *dev,
+				struct regulator_bulk_data **consumers)
+{
+	struct regulator_bulk_devres *devres;
+	int ret;
+
+	devres = devres_alloc(devm_regulator_bulk_release,
+			      sizeof(*devres), GFP_KERNEL);
+	if (!devres)
+		return -ENOMEM;
+
+	ret = regulator_bulk_get_all(dev, &devres->consumers);
+	if (ret > 0) {
+		*consumers = devres->consumers;
+		devres->num_consumers = ret;
+		devres_add(dev, devres);
+	} else {
+		devres_free(devres);
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(devm_regulator_bulk_get_all);
+
 static void devm_rdev_release(struct device *dev, void *res)
 {
 	regulator_unregister(*(struct regulator_dev **)res);

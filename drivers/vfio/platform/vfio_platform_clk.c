@@ -63,6 +63,9 @@ int vfio_platform_clk_init(struct vfio_platform_device *vdev)
 	}
 	clk_res->num_clks = ret;
 
+	if (!clk_res->num_clks)
+		return 0;
+
 	clk_res->vdev = devm_kcalloc(dev, clk_res->num_clks,
 				     sizeof(clk_res->vdev), GFP_KERNEL);
 	if (!clk_res->vdev)
@@ -121,11 +124,13 @@ int vfio_platform_clk_register_vhost(struct vfio_platform_device *vdev,
 
 void vfio_platform_clk_cleanup(struct vfio_platform_device *vdev)
 {
+	struct clk_devres *clk_res = &vdev->clk_res;
 	int i;
 
 	for (i = 0; i < vdev->clk_res.num_clks; i++) {
-		clk_notifier_unregister(vdev->clk_res.clk_bulk[i].clk,
+		clk_notifier_unregister(clk_res->clk_bulk[i].clk,
 					&vdev->clk_nb);
+		clk_res->vdev[i] = NULL;
 	}
 }
 

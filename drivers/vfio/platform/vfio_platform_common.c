@@ -12,6 +12,7 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/pm_runtime.h>
+#include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/types.h>
 #include <linux/uaccess.h>
@@ -239,6 +240,7 @@ static void vfio_platform_release(void *device_data)
 			WARN_ON(1);
 		}
 
+		vfio_platform_regulator_cleanup(vdev);
 		vfio_platform_clk_cleanup(vdev);
 		pm_runtime_put(vdev->device);
 		vfio_platform_regions_cleanup(vdev);
@@ -279,6 +281,10 @@ static int vfio_platform_open(void *device_data)
 		if (ret < 0)
 			goto err_rst;
 
+		ret = vfio_platform_regulator_init(vdev);
+		if (ret < 0)
+			goto err_rst;
+
 		ret = vfio_platform_call_reset(vdev, &extra_dbg);
 		if (ret && vdev->reset_required) {
 			dev_warn(vdev->device, "reset driver is required and reset call failed in open (%d) %s\n",
@@ -313,7 +319,7 @@ static long vfio_platform_ioctl(void *device_data,
 	if (cmd == VFIO_DEVICE_GET_INFO) {
 		struct vfio_device_info info;
 
-		minsz = offsetofend(struct vfio_device_info, num_clks);
+		minsz = offsetofend(struct vfio_device_info, num_regulators);
 
 		if (copy_from_user(&info, (void __user *)arg, minsz))
 			return -EFAULT;
@@ -327,6 +333,7 @@ static long vfio_platform_ioctl(void *device_data,
 		info.num_regions = vdev->num_regions;
 		info.num_irqs = vdev->num_irqs;
 		info.num_clks = vdev->clk_res.num_clks;
+		info.num_regulators = vdev->regulator_res.num_regulators;
 
 		return copy_to_user((void __user *)arg, &info, minsz) ?
 			-EFAULT : 0;
@@ -358,17 +365,28 @@ static long vfio_platform_ioctl(void *device_data,
 
 		minsz = offsetofend(struct vfio_irq_info, count);
 
+		pr_err("%s ----------- 1\n", __func__);
+
 		if (copy_from_user(&info, (void __user *)arg, minsz))
 			return -EFAULT;
+
+		pr_err("%s ----------- 2\n", __func__);
 
 		if (info.argsz < minsz)
 			return -EINVAL;
 
+		pr_err("%s ----------- 3 idx %d max irqs %d\n",
+			__func__, info.index, vdev->num_irqs);
+
 		if (info.index >= vdev->num_irqs)
 			return -EINVAL;
 
+		pr_err("%s ----------- 4\n", __func__);
+
 		info.flags = vdev->irqs[info.index].flags;
 		info.count = vdev->irqs[info.index].count;
+
+		pr_err("%s ----------- 5\n", __func__);
 
 		return copy_to_user((void __user *)arg, &info, minsz) ?
 			-EFAULT : 0;
@@ -404,6 +422,35 @@ static long vfio_platform_ioctl(void *device_data,
 		kfree(data);
 
 		return ret;
+
+	} else if (cmd == VFIO_DEVICE_GET_REGULATOR_INFO) {
+		struct vfio_regulator_info info;
+		const void __user *usr_data;
+		const char *supply;
+		size_t sz;
+
+		minsz = offsetofend(struct vfio_regulator_info, len);
+
+		if (copy_from_user(&info, (void __user *)arg, minsz))
+			return -EFAULT;
+
+		if (info.argsz < minsz)
+			return -EINVAL;
+
+		if (info.index >= vdev->regulator_res.num_regulators)
+			return -EINVAL;
+
+		supply = vdev->regulator_res.regulator_bulk[info.index].supply;
+		sz = strlen(supply);
+		if (info.len < sz) {
+			info.len = sz;
+			return copy_to_user((void __user *)arg, &info, minsz) ?
+						-EFAULT : -ENOSPC;
+		}
+
+		usr_data = (const void __user *)(uintptr_t)info.usr_data;
+		return copy_to_user((void __user *)usr_data, supply, sz) ?
+			-EFAULT : 0;
 
 	} else if (cmd == VFIO_DEVICE_RESET) {
 		return vfio_platform_call_reset(vdev, NULL);
@@ -636,6 +683,8 @@ static int vfio_platofrm_vhost_req(void *device_data,
 	switch (req_hdr->dev_type) {
 	case VIRTIO_ID_CLK:
 		return vfio_platform_clk_handle_req(vdev, req);
+	case VIRTIO_ID_REGULATOR:
+		return vfio_platform_regulator_handle_req(vdev, req);
 	default:
 		dev_err(vdev->device, "unsupported device type\n");
 
@@ -655,6 +704,10 @@ static int vfio_platofrm_vhost_register(void *device_data,
 	switch (info->vhost_dev_type) {
 	case VIRTIO_ID_CLK:
 		return vfio_platform_clk_register_vhost(vdev, info->vhost,
+							info->vhost_dev_index,
+							info->add);
+	case VIRTIO_ID_REGULATOR:
+		return vfio_platform_regulator_register_vhost(vdev, info->vhost,
 							info->vhost_dev_index,
 							info->add);
 	default:
