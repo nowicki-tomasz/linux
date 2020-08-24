@@ -8,8 +8,8 @@ vhost_scsi-y := scsi.o
 obj-$(CONFIG_VHOST_VSOCK) += vhost_vsock.o
 vhost_vsock-y := vsock.o
 
-obj-$(CONFIG_VHOST_VFIO) += vhost_vfio.o
-vhost_vfio-y := vfio.o
+obj-$(CONFIG_VHOST_PIPE) += vhost_pipe.o
+vhost_pipe-y := vpipe.o
 
 obj-$(CONFIG_VHOST_RING) += vringh.o
 

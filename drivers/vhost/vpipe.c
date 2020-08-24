@@ -61,7 +61,7 @@ struct vhost_vfio_evt {
 	u32			size;
 };
 
-static void vhost_vfio_flush(struct vhost_vfio *vv)
+static void vhost_pipe_flush(struct vhost_vfio *vv)
 {
 	struct vhost_virtqueue *vq_req = &vv->vqs[VHOST_VFIO_VQ_REQUEST];
 
@@ -69,14 +69,14 @@ static void vhost_vfio_flush(struct vhost_vfio *vv)
 	vhost_poll_flush(&vq_req->poll);
 }
 
-static void __vhost_vfio_stop(struct vhost_virtqueue *vq)
+static void __vhost_pipe_stop(struct vhost_virtqueue *vq)
 {
 	mutex_lock(&vq->mutex);
 	vq->private_data = NULL;
 	mutex_unlock(&vq->mutex);
 }
 
-static long vhost_vfio_reset_owner(struct vhost_vfio *vv)
+static long vhost_pipe_reset_owner(struct vhost_vfio *vv)
 {
 	long err;
 	struct vhost_umem *umem;
@@ -92,16 +92,16 @@ static long vhost_vfio_reset_owner(struct vhost_vfio *vv)
 		goto done;
 	}
 
-	__vhost_vfio_stop(&vv->vqs[VHOST_VFIO_VQ_REQUEST]);
-	__vhost_vfio_stop(&vv->vqs[VHOST_VFIO_VQ_EVENT]);
-	vhost_vfio_flush(vv);
+	__vhost_pipe_stop(&vv->vqs[VHOST_VFIO_VQ_REQUEST]);
+	__vhost_pipe_stop(&vv->vqs[VHOST_VFIO_VQ_EVENT]);
+	vhost_pipe_flush(vv);
 	vhost_dev_reset_owner(&vv->dev, umem);
 done:
 	mutex_unlock(&vv->dev.mutex);
 	return err;
 }
 
-static long vhost_vfio_set_owner(struct vhost_vfio *vv)
+static long vhost_pipe_set_owner(struct vhost_vfio *vv)
 {
 	int r;
 
@@ -112,13 +112,13 @@ static long vhost_vfio_set_owner(struct vhost_vfio *vv)
 	}
 
 	r = vhost_dev_set_owner(&vv->dev);
-	vhost_vfio_flush(vv);
+	vhost_pipe_flush(vv);
 out:
 	mutex_unlock(&vv->dev.mutex);
 	return r;
 }
 
-static int vhost_vfio_set_features(struct vhost_vfio *vv, u64 features)
+static int vhost_pipe_set_features(struct vhost_vfio *vv, u64 features)
 {
 	struct vhost_virtqueue *vq;
 	int i;
@@ -143,7 +143,7 @@ static int vhost_vfio_set_features(struct vhost_vfio *vv, u64 features)
 	return 0;
 }
 
-static long vhost_vfio_set_fd(struct vhost_vfio *vv, void __user *argp)
+static long vhost_pipe_set_fd(struct vhost_vfio *vv, void __user *argp)
 {
 	struct vhost_vfio_dev_info info;
 	struct fd f;
@@ -171,7 +171,7 @@ out:
 	return r;
 }
 
-static int __vhost_vfio_get_one_evt(struct vhost_vfio *vv)
+static int __vhost_pipe_get_one_evt(struct vhost_vfio *vv)
 {
 	struct vhost_virtqueue *vq = &vv->vqs[VHOST_VFIO_VQ_EVENT];
 	int ret = 0, count = 0;
@@ -229,7 +229,7 @@ static int __vhost_vfio_get_one_evt(struct vhost_vfio *vv)
 	return ret;
 }
 
-static int vhost_vfio_get_one_evt(struct vhost_vfio *vv)
+static int vhost_pipe_get_one_evt(struct vhost_vfio *vv)
 {
 	struct vhost_virtqueue *vq = &vv->vqs[VHOST_VFIO_VQ_EVENT];
 	struct vhost_dev *dev = &vv->dev;
@@ -245,7 +245,7 @@ static int vhost_vfio_get_one_evt(struct vhost_vfio *vv)
 	/* Avoid further vmexits, we're already processing the virtqueue */
 	vhost_disable_notify(dev, vq);
 
-	ret = __vhost_vfio_get_one_evt(vv);
+	ret = __vhost_pipe_get_one_evt(vv);
 
 	vhost_enable_notify(dev, vq);
 	mutex_unlock(&vq->mutex);
@@ -265,7 +265,7 @@ static int vhost_vfio_get_one_evt(struct vhost_vfio *vv)
  *
  * Send an event and wait for it to complete. Return the event status.
  */
-static int vhost_vfio_do_send_one_evt(struct vhost_vfio *vv,
+static int vhost_pipe_do_send_one_evt(struct vhost_vfio *vv,
 				      struct vhost_virtqueue *vq)
 {
 	struct vhost_dev *dev = &vv->dev;
@@ -309,7 +309,7 @@ static int vhost_vfio_do_send_one_evt(struct vhost_vfio *vv,
 	vhost_add_used_and_signal(dev, vq, vv->evt_head, evt->size);
 
 	/* Wait until guest refill */
-	ret = __vhost_vfio_get_one_evt(vv);
+	ret = __vhost_pipe_get_one_evt(vv);
 	if (ret)
 		goto out;
 
@@ -321,7 +321,7 @@ out:
 	return ret;
 }
 
-static void vhost_vfio_event_work(struct vhost_work *work)
+static void vhost_pipe_event_work(struct vhost_work *work)
 {
 	struct vhost_virtqueue *vq;
 	struct vhost_vfio *vv;
@@ -329,10 +329,10 @@ static void vhost_vfio_event_work(struct vhost_work *work)
 	vv = container_of(work, struct vhost_vfio, evt_work);
 	vq = &vv->vqs[VHOST_VFIO_VQ_EVENT];
 
-	vhost_vfio_do_send_one_evt(vv, vq);
+	vhost_pipe_do_send_one_evt(vv, vq);
 }
 
-int vhost_vfio_send_evt(struct vhost_dev *dev, void *buf, ssize_t size)
+int vhost_pipe_send_evt(struct vhost_dev *dev, void *buf, ssize_t size)
 {
 	struct vhost_vfio *vv = container_of(dev, struct vhost_vfio, dev);
 	struct vhost_vfio_evt *evt;
@@ -361,7 +361,7 @@ int vhost_vfio_send_evt(struct vhost_dev *dev, void *buf, ssize_t size)
 	return vv->evt_status;
 }
 
-static int vhost_vfio_start(struct vhost_vfio *vv)
+static int vhost_pipe_start(struct vhost_vfio *vv)
 {
 	struct vhost_virtqueue *vq;
 	struct vfio_vhost_info info;
@@ -394,7 +394,7 @@ static int vhost_vfio_start(struct vhost_vfio *vv)
 		mutex_unlock(&vq->mutex);
 	}
 
-	ret = vhost_vfio_get_one_evt(vv);
+	ret = vhost_pipe_get_one_evt(vv);
 	if (ret)
 		goto err;
 
@@ -422,7 +422,7 @@ err:
 	return ret;
 }
 
-static int vhost_vfio_stop(struct vhost_vfio *vv)
+static int vhost_pipe_stop(struct vhost_vfio *vv)
 {
 	struct vfio_vhost_info info;
 	int ret, i;
@@ -440,14 +440,14 @@ static int vhost_vfio_stop(struct vhost_vfio *vv)
 	vfio_vhost_register(vv->vfio_dev_consumer, &info);
 
 	for (i = 0; i < ARRAY_SIZE(vv->vqs); i++)
-		__vhost_vfio_stop(&vv->vqs[i]);
+		__vhost_pipe_stop(&vv->vqs[i]);
 
 err:
 	mutex_unlock(&vv->dev.mutex);
 	return ret;
 }
 
-static long vhost_vfio_ioctl(struct file *f, unsigned int ioctl,
+static long vhost_pipe_ioctl(struct file *f, unsigned int ioctl,
 			      unsigned long arg)
 {
 	struct vhost_vfio *vv = f->private_data;
@@ -465,33 +465,33 @@ static long vhost_vfio_ioctl(struct file *f, unsigned int ioctl,
 	case VHOST_SET_FEATURES:
 		if (copy_from_user(&features, argp, sizeof(features)))
 			return -EFAULT;
-		return vhost_vfio_set_features(vv, features);
+		return vhost_pipe_set_features(vv, features);
 	case VHOST_RESET_OWNER:
-		return vhost_vfio_reset_owner(vv);
+		return vhost_pipe_reset_owner(vv);
 	case VHOST_SET_OWNER:
-		return vhost_vfio_set_owner(vv);
+		return vhost_pipe_set_owner(vv);
 	case VHOST_VFIO_SET_FD:
-		return vhost_vfio_set_fd(vv, argp);
+		return vhost_pipe_set_fd(vv, argp);
 	case VHOST_VFIO_SET_RUNNING:
 		if (copy_from_user(&start, argp, sizeof(start)))
 			return -EFAULT;
 		if (start)
-			return vhost_vfio_start(vv);
+			return vhost_pipe_start(vv);
 		else
-			return vhost_vfio_stop(vv);
+			return vhost_pipe_stop(vv);
 	default:
 		mutex_lock(&vv->dev.mutex);
 		r = vhost_dev_ioctl(&vv->dev, ioctl, argp);
 		if (r == -ENOIOCTLCMD)
 			r = vhost_vring_ioctl(&vv->dev, ioctl, argp);
 		else
-			vhost_vfio_flush(vv);
+			vhost_pipe_flush(vv);
 		mutex_unlock(&vv->dev.mutex);
 		return r;
 	}
 }
 
-static struct vfio_vhost_req *vhost_vfio_alloc_req(struct vhost_virtqueue *vq,
+static struct vfio_vhost_req *vhost_pipe_alloc_req(struct vhost_virtqueue *vq,
 					     unsigned int out, unsigned int in)
 {
 	struct vhost_vfio *vv = container_of(vq->dev, struct vhost_vfio, dev);
@@ -531,7 +531,7 @@ static struct vfio_vhost_req *vhost_vfio_alloc_req(struct vhost_virtqueue *vq,
 	return req;
 }
 
-static void vhost_vfio_respond(struct vfio_vhost_req *req,
+static void vhost_pipe_respond(struct vfio_vhost_req *req,
 			       struct vhost_virtqueue *vq, unsigned int out,
 			       unsigned int in)
 {
@@ -550,7 +550,7 @@ static void vhost_vfio_respond(struct vfio_vhost_req *req,
 	kfree(req);
 }
 
-static void vhost_vfio_handle_req(struct vhost_vfio *vv,
+static void vhost_pipe_handle_req(struct vhost_vfio *vv,
 				   struct vhost_virtqueue *vq)
 {
 	unsigned int out = 0, in = 0;
@@ -579,7 +579,7 @@ static void vhost_vfio_handle_req(struct vhost_vfio *vv,
 			break;
 		}
 
-		vfio_req = vhost_vfio_alloc_req(vq, out, in);
+		vfio_req = vhost_pipe_alloc_req(vq, out, in);
 		if (!vfio_req) {
 			vq_err(vq, "Faulted on request allocation\n");
 			continue;
@@ -590,7 +590,7 @@ static void vhost_vfio_handle_req(struct vhost_vfio *vv,
 			vq_err(vq, "Request handling error %d\n", ret);
 		}
 
-		vhost_vfio_respond(vfio_req, vq, out, in);
+		vhost_pipe_respond(vfio_req, vq, out, in);
 		vhost_add_used_and_signal(&vv->dev, vq, head, 0);
 	} while (likely(!vhost_exceeds_weight(vq, ++c, 0)));
 
@@ -604,10 +604,10 @@ static void handle_rqst_kick(struct vhost_work *work)
 						  poll.work);
 	struct vhost_vfio *vv = container_of(vq->dev, struct vhost_vfio, dev);
 
-	vhost_vfio_handle_req(vv, vq);
+	vhost_pipe_handle_req(vv, vq);
 }
 
-static int vhost_vfio_open(struct inode *inode, struct file *f)
+static int vhost_pipe_open(struct inode *inode, struct file *f)
 {
 	struct vhost_virtqueue **vqs;
 	struct vhost_vfio *vv;
@@ -630,71 +630,71 @@ static int vhost_vfio_open(struct inode *inode, struct file *f)
 
 	spin_lock_init(&vv->evt_list_lock);
 	INIT_LIST_HEAD(&vv->evt_list);
-	vhost_work_init(&vv->evt_work, vhost_vfio_event_work);
+	vhost_work_init(&vv->evt_work, vhost_pipe_event_work);
 	f->private_data = vv;
 
 	return 0;
 }
 
-static int vhost_vfio_release(struct inode *inode, struct file *f)
+static int vhost_pipe_release(struct inode *inode, struct file *f)
 {
 	struct vhost_vfio *vv = f->private_data;
 
-	__vhost_vfio_stop(&vv->vqs[VHOST_VFIO_VQ_REQUEST]);
-	__vhost_vfio_stop(&vv->vqs[VHOST_VFIO_VQ_EVENT]);
-	vhost_vfio_flush(vv);
+	__vhost_pipe_stop(&vv->vqs[VHOST_VFIO_VQ_REQUEST]);
+	__vhost_pipe_stop(&vv->vqs[VHOST_VFIO_VQ_EVENT]);
+	vhost_pipe_flush(vv);
 	vhost_dev_stop(&vv->dev);
 	vhost_dev_cleanup(&vv->dev);
 	/* Make sure no callbacks are outstanding */
 	synchronize_rcu();
 	/* We do an extra flush before freeing memory,
 	 * since jobs can re-queue themselves. */
-	vhost_vfio_flush(vv);
+	vhost_pipe_flush(vv);
 	kfree(vv->dev.vqs);
 	kvfree(vv);
 	return 0;
 }
 
 #ifdef CONFIG_COMPAT
-static long vhost_vfio_compat_ioctl(struct file *f, unsigned int ioctl,
+static long vhost_pipe_compat_ioctl(struct file *f, unsigned int ioctl,
 				     unsigned long arg)
 {
-	return vhost_vfio_ioctl(f, ioctl, (unsigned long)compat_ptr(arg));
+	return vhost_pipe_ioctl(f, ioctl, (unsigned long)compat_ptr(arg));
 }
 #endif
 
-static const struct file_operations vhost_vfio_fops = {
+static const struct file_operations vhost_pipe_fops = {
 	.owner          = THIS_MODULE,
-	.release        = vhost_vfio_release,
-	.unlocked_ioctl = vhost_vfio_ioctl,
+	.release        = vhost_pipe_release,
+	.unlocked_ioctl = vhost_pipe_ioctl,
 #ifdef CONFIG_COMPAT
-	.compat_ioctl   = vhost_vfio_compat_ioctl,
+	.compat_ioctl   = vhost_pipe_compat_ioctl,
 #endif
-	.open           = vhost_vfio_open,
+	.open           = vhost_pipe_open,
 	.llseek		= noop_llseek,
 };
 
-static struct miscdevice vhost_vfio_misc = {
+static struct miscdevice vhost_pipe_misc = {
 	.minor = VHOST_VFIO_MINOR,
-	.name = "vhost-vfio",
-	.fops = &vhost_vfio_fops,
+	.name = "vhost-pipe",
+	.fops = &vhost_pipe_fops,
 };
 
-static int vhost_vfio_init(void)
+static int vhost_pipe_init(void)
 {
-	return misc_register(&vhost_vfio_misc);
+	return misc_register(&vhost_pipe_misc);
 }
-module_init(vhost_vfio_init);
+module_init(vhost_pipe_init);
 
-static void vhost_vfio_exit(void)
+static void vhost_pipe_exit(void)
 {
-	misc_deregister(&vhost_vfio_misc);
+	misc_deregister(&vhost_pipe_misc);
 }
-module_exit(vhost_vfio_exit);
+module_exit(vhost_pipe_exit);
 
 MODULE_VERSION("0.0.1");
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Tomasz Nowicki <tn@semihalf.com>");
-MODULE_DESCRIPTION("Host kernel interface for Virtio-based VFIO configuration");
+MODULE_DESCRIPTION("Host kernel medium for Virtio-based configuration requests handling");
 MODULE_ALIAS_MISCDEV(VHOST_VFIO_MINOR);
-MODULE_ALIAS("devname:vhost-vfio");
+MODULE_ALIAS("devname:vhost-pipe");
