@@ -37,6 +37,8 @@ int virtio_regulator_enable(struct regulator_dev *rdev)
 			.hdr.resp_len = sizeof(struct virtio_vfio_resp_status),
 	};
 
+	dev_err(&rdev->dev, "--------------> %s \n", __func__);
+
 	return WARN_ON(virtio_transport_send_req_sync(drvdata->virtio_trans, &msg,
 						      sizeof(msg)));
 }
@@ -51,6 +53,8 @@ int virtio_regulator_disable(struct regulator_dev *rdev)
 			.hdr.resp_len = sizeof(struct virtio_vfio_resp_status),
 	};
 
+	dev_err(&rdev->dev, "--------------> %s \n", __func__);
+
 	return WARN_ON(virtio_transport_send_req_sync(drvdata->virtio_trans, &msg,
 						      sizeof(msg)));
 }
@@ -62,12 +66,15 @@ int virtio_regulator_is_enabled(struct regulator_dev *rdev)
 			.hdr.dev_type = VIRTIO_ID_REGULATOR,
 			.hdr.req_type = VIRTIO_VFIO_REQ_REGULATOR_IS_ENABLED,
 			.hdr.req_len = 0,
-			.hdr.resp_len = sizeof(uint32_t) +
+			.hdr.resp_len = sizeof(uint64_t) +
 					sizeof(struct virtio_vfio_resp_status),
 	};
 
 	WARN_ON(virtio_transport_send_req_sync(drvdata->virtio_trans, &msg,
 					       sizeof(msg)));
+
+	dev_err(&rdev->dev, "--------------> %s is enabled %lu \n",
+		__func__, (long)msg.is_enabled);
 
 	return msg.is_enabled;
 }
@@ -80,12 +87,16 @@ int virtio_regulator_get_current_limit(struct regulator_dev *rdev)
 			.hdr.dev_type = VIRTIO_ID_REGULATOR,
 			.hdr.req_type = VIRTIO_VFIO_REQ_REGULATOR_GET_CUR_LIMIT,
 			.hdr.req_len = 0,
-			.hdr.resp_len = sizeof(uint32_t) +
+			.hdr.resp_len = sizeof(uint64_t) +
 					sizeof(struct virtio_vfio_resp_status),
 	};
 
 	WARN_ON(virtio_transport_send_req_sync(drvdata->virtio_trans, &msg,
 					      sizeof(msg)));
+
+	dev_err(&rdev->dev, "--------------> %s cur_limit %lu \n",
+		__func__, (long)msg.cur_limit);
+
 	return msg.cur_limit;
 }
 
@@ -96,11 +107,13 @@ int virtio_regulator_set_current_limit(struct regulator_dev *rdev,
 	struct virtio_vfio_regulator_set_cur_limit msg = {
 			.hdr.dev_type = VIRTIO_ID_REGULATOR,
 			.hdr.req_type = VIRTIO_VFIO_REQ_REGULATOR_SET_CUR_LIMIT,
-			.hdr.req_len = 2 * sizeof(uint32_t),
+			.hdr.req_len = 2 * sizeof(uint64_t),
 			.min_uA = min_uA,
 			.max_uA = max_uA,
 			.hdr.resp_len = sizeof(struct virtio_vfio_resp_status),
 	};
+
+	dev_err(&rdev->dev, "--------------> %s min %d max %d\n", __func__, min_uA, max_uA);
 
 	return WARN_ON(virtio_transport_send_req_sync(drvdata->virtio_trans, &msg,
 						      sizeof(msg)));
@@ -112,14 +125,18 @@ int virtio_regulator_list_voltage(struct regulator_dev *rdev, unsigned selector)
 	struct virtio_vfio_regulator_list_voltage msg = {
 			.hdr.dev_type = VIRTIO_ID_REGULATOR,
 			.hdr.req_type = VIRTIO_VFIO_REQ_REGULATOR_LIST_VOLTAGE,
-			.hdr.req_len = sizeof(uint32_t),
+			.hdr.req_len = sizeof(uint64_t),
 			.selector = selector,
-			.hdr.resp_len = sizeof(uint32_t) +
+			.hdr.resp_len = sizeof(uint64_t) +
 					sizeof(struct virtio_vfio_resp_status),
 	};
 
 	WARN_ON(virtio_transport_send_req_sync(drvdata->virtio_trans, &msg,
 						      sizeof(msg)));
+
+	dev_err(&rdev->dev, "--------------> %s selector %d vol %lu\n",
+		__func__, selector, (long)msg.vol);
+
 	return msg.vol;
 }
 
@@ -130,15 +147,19 @@ int virtio_regulator_map_voltage(struct regulator_dev *rdev,
 	struct virtio_vfio_regulator_map_voltage msg = {
 			.hdr.dev_type = VIRTIO_ID_REGULATOR,
 			.hdr.req_type = VIRTIO_VFIO_REQ_REGULATOR_MAP_VOLTAGE,
-			.hdr.req_len = 2 * sizeof(uint32_t),
+			.hdr.req_len = 2 * sizeof(uint64_t),
 			.min_uV = min_uV,
 			.max_uV = max_uV,
-			.hdr.resp_len = sizeof(uint32_t) +
+			.hdr.resp_len = sizeof(uint64_t) +
 					sizeof(struct virtio_vfio_resp_status),
 	};
 
 	WARN_ON(virtio_transport_send_req_sync(drvdata->virtio_trans, &msg,
 						      sizeof(msg)));
+
+	dev_err(&rdev->dev, "--------------> %s min %d max %d selector %lu\n",
+		__func__, min_uV, max_uV, (long)msg.selector);
+
 	return msg.selector;
 }
 
@@ -149,13 +170,16 @@ int virtio_regulator_get_voltage(struct regulator_dev *rdev)
 			.hdr.dev_type = VIRTIO_ID_REGULATOR,
 			.hdr.req_type = VIRTIO_VFIO_REQ_REGULATOR_GET_VOLTAGE,
 			.hdr.req_len = 0,
-			.hdr.resp_len = sizeof(uint32_t) +
+			.hdr.resp_len = sizeof(uint64_t) +
 					sizeof(struct virtio_vfio_resp_status),
 	};
 
 	WARN_ON(virtio_transport_send_req_sync(drvdata->virtio_trans, &msg,
 						      sizeof(msg)));
-	return msg.selector;
+
+//	dev_err(&rdev->dev, "--------------> %s vol %lu\n", __func__, (long)msg.vol);
+
+	return msg.vol;
 }
 
 int virtio_regulator_set_voltage(struct regulator_dev *rdev,
@@ -165,7 +189,7 @@ int virtio_regulator_set_voltage(struct regulator_dev *rdev,
 	struct virtio_vfio_regulator_set_voltage msg = {
 			.hdr.dev_type = VIRTIO_ID_REGULATOR,
 			.hdr.req_type = VIRTIO_VFIO_REQ_REGULATOR_SET_VOLTAGE,
-			.hdr.req_len = sizeof(uint32_t),
+			.hdr.req_len = sizeof(uint64_t),
 			.min_uV = min_uV,
 			.max_uV = max_uV,
 			.hdr.resp_len = sizeof(struct virtio_vfio_resp_status),
@@ -175,6 +199,10 @@ int virtio_regulator_set_voltage(struct regulator_dev *rdev,
 	ret = WARN_ON(virtio_transport_send_req_sync(drvdata->virtio_trans, &msg,
 						      sizeof(msg)));
 	*selector = msg.selector;
+
+	dev_err(&rdev->dev, "--------------> %s min %d max %d selector %lu\n",
+		__func__, min_uV, max_uV, (long)msg.selector);
+
 	return ret;
 }
 
@@ -235,25 +263,26 @@ static void virtio_regulator_evt_handler(struct virtqueue *vq)
 static int virtio_regulator_probe(struct virtio_device *vdev)
 {
 	struct device *dev = &vdev->dev;
-	struct device_node *node = dev->of_node;
+	struct device_node *node = dev->parent->of_node;
 	struct virtio_reg_data *drvdata;
 	struct regulator_config cfg = { };
 	size_t evt_sz, evt_status_sz;
-	unsigned n_voltages, type;
 	static int instance;
 	int ret;
 	struct virtio_vfio_regulator_type msg_type = {
 		.hdr.dev_type = VIRTIO_ID_REGULATOR,
 		.hdr.req_type = VIRTIO_VFIO_REQ_REGULATOR_GET_TYPE,
-		.hdr.resp_len = sizeof(type) +
+		.hdr.resp_len = sizeof(uint64_t) +
 				sizeof(struct virtio_vfio_resp_status),
 	};
 	struct virtio_vfio_regulator_n_voltages msg_n_voltages = {
 		.hdr.dev_type = VIRTIO_ID_REGULATOR,
 		.hdr.req_type = VIRTIO_VFIO_REQ_REGULATOR_GET_N_VOLTAGES,
-		.hdr.resp_len = sizeof(n_voltages) +
+		.hdr.resp_len = sizeof(uint64_t) +
 				sizeof(struct virtio_vfio_resp_status),
 	};
+
+	dev_err(dev, "%s start probing !!!!!!!!!!!!!!!!!!!!!!\n", __func__);
 
 	drvdata = devm_kzalloc(dev, sizeof(*drvdata), GFP_KERNEL);
 	if (!drvdata)
@@ -283,7 +312,7 @@ static int virtio_regulator_probe(struct virtio_device *vdev)
 	ret = virtio_transport_send_req_sync(drvdata->virtio_trans, &msg_type,
 					     sizeof(msg_type));
 	if (ret) {
-		dev_err(dev, "Failed to get regulator number of voltages (err = %d)\n",
+		dev_err(dev, "Failed to get regulator type (err = %d)\n",
 			ret);
 		goto err;
 	}
@@ -301,6 +330,8 @@ static int virtio_regulator_probe(struct virtio_device *vdev)
 	cfg.dev = dev;
 	cfg.driver_data = drvdata;
 	cfg.of_node = node;
+
+	pr_err("************ %s node %px\n", __func__, node);
 
 	drvdata->rdev = devm_regulator_register(dev, &drvdata->desc, &cfg);
 	if (IS_ERR(drvdata->dev)) {

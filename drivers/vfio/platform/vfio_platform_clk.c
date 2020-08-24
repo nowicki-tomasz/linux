@@ -47,7 +47,7 @@ static int vfio_platform_clk_notifier_cb(struct notifier_block *nb,
 	if (!vhost)
 		return NOTIFY_OK;
 
-	return vhost_vfio_send_evt(vhost, &evt, sizeof(evt));
+	return vhost_pipe_send_evt(vhost, &evt, sizeof(evt));
 }
 
 int vfio_platform_clk_init(struct vfio_platform_device *vdev)

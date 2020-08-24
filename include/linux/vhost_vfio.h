@@ -5,6 +5,6 @@
 #include <linux/types.h>
 
 struct vhost_dev;
-extern int vhost_vfio_send_evt(struct vhost_dev *dev, void *buf, ssize_t size);
+extern int vhost_pipe_send_evt(struct vhost_dev *dev, void *buf, ssize_t size);
 
 #endif /* _LINUX_VHOST_VFIO_H */

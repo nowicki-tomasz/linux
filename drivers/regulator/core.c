@@ -407,7 +407,7 @@ static struct device_node *of_get_regulator(struct device *dev, const char *supp
 	struct device_node *regnode = NULL;
 	char prop_name[32]; /* 32 is max size of property name */
 
-	dev_dbg(dev, "Looking up %s-supply from device tree\n", supply);
+	dev_err(dev, "Looking up %s-supply from device tree\n", supply);
 
 	snprintf(prop_name, 32, "%s-supply", supply);
 	regnode = of_parse_phandle(dev->of_node, prop_name, 0);
@@ -417,7 +417,7 @@ static struct device_node *of_get_regulator(struct device *dev, const char *supp
 		if (regnode)
 			return regnode;
 
-		dev_dbg(dev, "Looking up %s property in node %pOF failed\n",
+		dev_err(dev, "Looking up %s property in node %pOF failed\n",
 				prop_name, dev->of_node);
 		return NULL;
 	}
@@ -1098,7 +1098,7 @@ static void print_constraints(struct regulator_dev *rdev)
 	if (!count)
 		scnprintf(buf, len, "no parameters");
 
-	rdev_dbg(rdev, "%s\n", buf);
+	rdev_err(rdev, "%s\n", buf);
 
 	if ((constraints->min_uV != constraints->max_uV) &&
 	    !regulator_ops_is_valid(rdev, REGULATOR_CHANGE_VOLTAGE))
@@ -1606,7 +1606,7 @@ static struct regulator *create_regulator(struct regulator_dev *rdev,
 		}
 
 		err = sysfs_create_link_nowarn(&dev->kobj, &rdev->dev.kobj,
-					       supply_name);
+					buf);
 		if (err) {
 			rdev_dbg(rdev, "could not add device link %s err %d\n",
 				  dev->kobj.name, err);
@@ -1723,6 +1723,8 @@ static struct regulator_dev *regulator_dev_lookup(struct device *dev,
 	struct regulator_map *map;
 	const char *devname = NULL;
 
+	pr_err("============== %s 1\n", __func__);
+
 	regulator_supply_alias(&dev, &supply);
 
 	/* first do a dt based lookup */
@@ -1732,6 +1734,8 @@ static struct regulator_dev *regulator_dev_lookup(struct device *dev,
 			r = of_find_regulator_by_node(node);
 			if (r)
 				return r;
+
+			pr_err("============== %s 2\n", __func__);
 
 			/*
 			 * We have a node, but there is no device.
@@ -1863,6 +1867,8 @@ struct regulator *_regulator_get(struct device *dev, const char *id,
 		pr_err("get() with no identifier\n");
 		return ERR_PTR(-EINVAL);
 	}
+
+	pr_err("============== %s 1\n", __func__);
 
 	rdev = regulator_dev_lookup(dev, id);
 	if (IS_ERR(rdev)) {
@@ -2058,6 +2064,7 @@ static void _regulator_put(struct regulator *regulator)
 
 		/* remove any sysfs entries */
 		sysfs_remove_link(&rdev->dev.kobj, regulator->supply_name);
+		sysfs_remove_link(&regulator->dev->kobj, regulator->supply_name);
 	}
 
 	regulator_lock(rdev);
