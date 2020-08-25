@@ -11,3 +11,4 @@ obj-$(CONFIG_VFIO_PLATFORM_XHCI_RESET) += vfio-platform-xhci.o
 obj-$(CONFIG_VFIO_PLATFORM_SDHCI_RESET) += vfio-platform-sdhci.o
 obj-$(CONFIG_VFIO_PLATFORM_AMDXGBE_RESET) += vfio-platform-amdxgbe.o
 obj-$(CONFIG_VFIO_PLATFORM_BCMFLEXRM_RESET) += vfio_platform_bcmflexrm.o
+obj-$(CONFIG_VFIO_PLATFORM_QCOM_WIFI_RESET) += vfio_platform_qcom_wifi.o
