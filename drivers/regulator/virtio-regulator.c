@@ -264,6 +264,7 @@ static int virtio_regulator_probe(struct virtio_device *vdev)
 {
 	struct device *dev = &vdev->dev;
 	struct device_node *node = dev->parent->of_node;
+	struct regulator_init_data *init_data;
 	struct virtio_reg_data *drvdata;
 	struct regulator_config cfg = { };
 	size_t evt_sz, evt_status_sz;
@@ -327,9 +328,17 @@ static int virtio_regulator_probe(struct virtio_device *vdev)
 	}
 	drvdata->desc.n_voltages = msg_n_voltages.n_voltages;
 
+	init_data = of_get_regulator_init_data(dev, node, &drvdata->desc);
+	if (!init_data) {
+		ret = -ENOMEM;
+		dev_err(dev, "Failed to init of constrains (err = %d)\n", ret);
+		goto err;
+	}
+
 	cfg.dev = dev;
 	cfg.driver_data = drvdata;
 	cfg.of_node = node;
+	cfg.init_data = init_data;
 
 	pr_err("************ %s node %px\n", __func__, node);
 
