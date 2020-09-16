@@ -185,7 +185,7 @@ static void virtio_clk_evt_handler(struct virtqueue *vq)
 static int virtio_clk_probe(struct virtio_device *vdev)
 {
 	struct device *dev = &vdev->dev;
-	struct device_node *node = dev->of_node;
+	struct device_node *node = dev->parent->of_node;
 	struct clk_init_data init = { };
 	struct vfio_clk_dev *clk;
 	static int instance;
