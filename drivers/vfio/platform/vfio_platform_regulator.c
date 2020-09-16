@@ -8,6 +8,7 @@
 
 #include <linux/notifier.h>
 #include <linux/regulator/consumer.h>
+#include <linux/regulator/driver.h>
 #include <linux/slab.h>
 #include <linux/types.h>
 #include <linux/vfio.h>
@@ -125,8 +126,10 @@ void vfio_platform_regulator_cleanup(struct vfio_platform_device *vdev)
 {
 	struct regulator_devres *regulator_res = &vdev->regulator_res;
 	int i;
-//
-	for (i = 0; i < vdev->regulator_res.num_regulators; i++) {
+
+	regulator_bulk_free(regulator_res->num_regulators,
+			    regulator_res->regulator_bulk);
+	for (i = 0; i < regulator_res->num_regulators; i++) {
 //		clk_notifier_unregister(vdev->regulator_res.clk_bulk[i].clk,
 //					&vdev->clk_nb);
 		regulator_res->vdev[i] = NULL;
@@ -159,7 +162,8 @@ int vfio_platform_regulator_handle_req(struct vfio_platform_device *vdev,
 	struct virtio_vfio_regulator_list_voltage *list_vol;
 	struct virtio_vfio_regulator_map_voltage *map_vol;
 	struct virtio_vfio_regulator_set_voltage *set_vol;
-	uint64_t *is_enabled, *get_cur_limit, *vol, *selector, *n_voltage;
+	uint64_t *is_enabled, *get_cur_limit, *vol, *selector, *n_voltage,
+		*type;
 	int ret = 0;
 
 	index = req->dev_idx;
@@ -177,6 +181,14 @@ int vfio_platform_regulator_handle_req(struct vfio_platform_device *vdev,
 
 	switch (req_hdr->req_type) {
 	case VIRTIO_VFIO_REQ_REGULATOR_GET_TYPE:
+		if (req_hdr->resp_len - status_sz < sizeof(*type)) {
+			ret = -EINVAL;
+			break;
+		}
+
+		type = (uint64_t *)req->vq_resp;
+		*type = REGULATOR_VOLTAGE;
+		break;
 	case VIRTIO_VFIO_REQ_REGULATOR_GET_N_VOLTAGES:
 		if (req_hdr->resp_len - status_sz < sizeof(*n_voltage)) {
 			ret = -EINVAL;
@@ -211,7 +223,7 @@ int vfio_platform_regulator_handle_req(struct vfio_platform_device *vdev,
 		*get_cur_limit = regulator_get_current_limit(consumer);
 		break;
 	case VIRTIO_VFIO_REQ_REGULATOR_SET_CUR_LIMIT:
-		if (req_hdr->req_len < 2 * sizeof(uint32_t)) {
+		if (req_hdr->req_len < 2 * sizeof(uint64_t)) {
 			ret = -EINVAL;
 			break;
 		}
@@ -225,7 +237,7 @@ int vfio_platform_regulator_handle_req(struct vfio_platform_device *vdev,
 			dev_err(vdev->device, "regulator_set_current_limit failed\n");
 		break;
 	case VIRTIO_VFIO_REQ_REGULATOR_LIST_VOLTAGE:
-		if (req_hdr->req_len < sizeof(uint32_t)) {
+		if (req_hdr->req_len < sizeof(uint64_t)) {
 			ret = -EINVAL;
 			break;
 		}
@@ -235,7 +247,7 @@ int vfio_platform_regulator_handle_req(struct vfio_platform_device *vdev,
 		*vol = regulator_list_voltage(consumer, list_vol->selector);
 		break;
 	case VIRTIO_VFIO_REQ_REGULATOR_MAP_VOLTAGE:
-		if (req_hdr->req_len < 2 * sizeof(uint32_t)) {
+		if (req_hdr->req_len < 2 * sizeof(uint64_t)) {
 			ret = -EINVAL;
 			break;
 		}
@@ -247,7 +259,7 @@ int vfio_platform_regulator_handle_req(struct vfio_platform_device *vdev,
 						      map_vol->max_uV);
 		break;
 	case VIRTIO_VFIO_REQ_REGULATOR_GET_VOLTAGE:
-		if (req_hdr->req_len < sizeof(uint32_t)) {
+		if (req_hdr->resp_len - status_sz < sizeof(*vol)) {
 			ret = -EINVAL;
 			break;
 		}
@@ -256,7 +268,7 @@ int vfio_platform_regulator_handle_req(struct vfio_platform_device *vdev,
 		*vol = regulator_get_voltage(consumer);
 		break;
 	case VIRTIO_VFIO_REQ_REGULATOR_SET_VOLTAGE:
-		if (req_hdr->req_len < 2 * sizeof(uint32_t)) {
+		if (req_hdr->req_len < 2 * sizeof(uint64_t)) {
 			ret = -EINVAL;
 			break;
 		}

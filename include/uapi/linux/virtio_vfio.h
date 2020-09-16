@@ -103,13 +103,13 @@ struct virtio_vfio_clk_event {
 
 struct virtio_vfio_regulator_type {
 	struct virtio_vfio_req_hdr	hdr;
-	__le32				type;
+	__le64				type;
 	struct virtio_vfio_resp_status	resp;
 } __attribute__((packed));
 
 struct virtio_vfio_regulator_n_voltages {
 	struct virtio_vfio_req_hdr	hdr;
-	__le32				n_voltages;
+	__le64				n_voltages;
 	struct virtio_vfio_resp_status	resp;
 } __attribute__((packed));
 
@@ -125,49 +125,49 @@ struct virtio_vfio_regulator_disable {
 
 struct virtio_vfio_regulator_is_enable {
 	struct virtio_vfio_req_hdr	hdr;
-	__le32				is_enabled;
+	__le64				is_enabled;
 	struct virtio_vfio_resp_status	resp;
 } __attribute__((packed));
 
 struct virtio_vfio_regulator_get_cur_limit {
 	struct virtio_vfio_req_hdr	hdr;
-	__le32				cur_limit;
+	__le64				cur_limit;
 	struct virtio_vfio_resp_status	resp;
 } __attribute__((packed));
 
 struct virtio_vfio_regulator_set_cur_limit {
 	struct virtio_vfio_req_hdr	hdr;
-	__le32				min_uA;
-	__le32				max_uA;
+	__le64				min_uA;
+	__le64				max_uA;
 	struct virtio_vfio_resp_status	resp;
 } __attribute__((packed));
 
 struct virtio_vfio_regulator_list_voltage {
 	struct virtio_vfio_req_hdr	hdr;
-	__le32				selector;
-	__le32				vol;
+	__le64				selector;
+	__le64				vol;
 	struct virtio_vfio_resp_status	resp;
 } __attribute__((packed));
 
 struct virtio_vfio_regulator_map_voltage {
 	struct virtio_vfio_req_hdr	hdr;
-	__le32				min_uV;
-	__le32				max_uV;
-	__le32				selector;
+	__le64				min_uV;
+	__le64				max_uV;
+	__le64				selector;
 	struct virtio_vfio_resp_status	resp;
 } __attribute__((packed));
 
 struct virtio_vfio_regulator_get_voltage {
 	struct virtio_vfio_req_hdr	hdr;
-	__le32				selector;
+	__le64				vol;
 	struct virtio_vfio_resp_status	resp;
 } __attribute__((packed));
 
 struct virtio_vfio_regulator_set_voltage {
 	struct virtio_vfio_req_hdr	hdr;
-	__le32				min_uV;
-	__le32				max_uV;
-	__le32				selector;
+	__le64				min_uV;
+	__le64				max_uV;
+	__le64				selector;
 	struct virtio_vfio_resp_status	resp;
 } __attribute__((packed));
 

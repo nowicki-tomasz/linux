@@ -1608,7 +1608,7 @@ static struct regulator *create_regulator(struct regulator_dev *rdev,
 		}
 
 		err = sysfs_create_link_nowarn(&dev->kobj, &rdev->dev.kobj,
-					       supply_name);
+					buf);
 		if (err) {
 			rdev_dbg(rdev, "could not add device link %s err %d\n",
 				  dev->kobj.name, err);
@@ -2060,6 +2060,7 @@ static void _regulator_put(struct regulator *regulator)
 
 		/* remove any sysfs entries */
 		sysfs_remove_link(&rdev->dev.kobj, regulator->supply_name);
+		sysfs_remove_link(&regulator->dev->kobj, regulator->supply_name);
 	}
 
 	regulator_lock(rdev);
