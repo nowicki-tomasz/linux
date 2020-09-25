@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config INTERCONNECT_VIRTIO
+	tristate "Virtio assist interconnect driver"
+	depends on INTERCONNECT && VIRTIO
+	help
+	  This is a driver for the guest that need to virtualize host interrconets
+	  providers.

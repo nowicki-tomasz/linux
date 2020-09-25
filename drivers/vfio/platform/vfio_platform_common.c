@@ -240,6 +240,7 @@ static void vfio_platform_release(void *device_data)
 			WARN_ON(1);
 		}
 
+		vfio_platform_intercon_cleanup(vdev);
 		vfio_platform_regulator_cleanup(vdev);
 		vfio_platform_clk_cleanup(vdev);
 		pm_runtime_put(vdev->device);
@@ -282,6 +283,10 @@ static int vfio_platform_open(void *device_data)
 			goto err_rst;
 
 		ret = vfio_platform_regulator_init(vdev);
+		if (ret < 0)
+			goto err_rst;
+
+		ret = vfio_platform_intercon_init(vdev);
 		if (ret < 0)
 			goto err_rst;
 
@@ -685,6 +690,8 @@ static int vfio_platform_vhost_req(void *device_data,
 		return vfio_platform_clk_handle_req(vdev, req);
 	case VIRTIO_ID_REGULATOR:
 		return vfio_platform_regulator_handle_req(vdev, req);
+	case VIRTIO_ID_INTERCONNECT:
+		return vfio_platform_intercon_handle_req(vdev, req);
 	default:
 		dev_err(vdev->device, "unsupported device type\n");
 
@@ -708,6 +715,10 @@ static int vfio_platform_vhost_register(void *device_data,
 							info->add);
 	case VIRTIO_ID_REGULATOR:
 		return vfio_platform_regulator_register_vhost(vdev, info->vhost,
+							info->vhost_dev_index,
+							info->add);
+	case VIRTIO_ID_INTERCONNECT:
+		return vfio_platform_intercon_register_vhost(vdev, info->vhost,
 							info->vhost_dev_index,
 							info->add);
 	default:
