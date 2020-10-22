@@ -823,6 +823,121 @@ struct phy *devm_of_phy_get_by_index(struct device *dev, struct device_node *np,
 }
 EXPORT_SYMBOL_GPL(devm_of_phy_get_by_index);
 
+struct phy_bulk_devres {
+	struct phy_bulk_data *phys;
+	int num_phys;
+};
+
+static void phy_bulk_put(int num_phys, struct phy_bulk_data *phys)
+{
+	while (--num_phys >= 0) {
+		phy_put(phys[num_phys].phy);
+		phys[num_phys].phy = NULL;
+	}
+}
+
+static void devm_phy_bulk_release(struct device *dev, void *res)
+{
+	struct phy_bulk_devres *devres = res;
+
+	phy_bulk_put(devres->num_phys, devres->phys);
+}
+
+static unsigned int of_phy_get_parent_count(const struct device_node *np)
+{
+	int count;
+
+	count = of_count_phandle_with_args(np, "phys", "#phy-cells");
+	if (count < 0)
+		return 0;
+
+	return count;
+}
+
+static int __must_check of_phy_bulk_get(struct device_node *np, int num_phys,
+					struct phy_bulk_data *phys)
+{
+	int ret;
+	int i;
+	for (i = 0; i < num_phys; i++) {
+		phys[i].id = NULL;
+		phys[i].phy = NULL;
+	}
+
+	for (i = 0; i < num_phys; i++) {
+		of_property_read_string_index(np, "phy-names", i, &phys[i].id);
+		phys[i].phy = _of_phy_get(np, i);
+		if (IS_ERR(phys[i].phy)) {
+			ret = PTR_ERR(phys[i].phy);
+			pr_err("%pOF: Failed to get phy index: %d ret: %d\n",
+			       np, i, ret);
+			phys[i].phy = NULL;
+			goto err;
+		}
+	}
+
+	return 0;
+
+err:
+	phy_bulk_put(i, phys);
+
+	return ret;
+}
+
+static int __must_check phy_bulk_get_all(struct device *dev,
+					    struct phy_bulk_data **phys)
+{
+	struct phy_bulk_data *phy_bulk;
+	struct device_node *np;
+	int num_phys;
+	int ret;
+
+	np = dev_of_node(dev);
+	if (!np)
+		return 0;
+
+	num_phys = of_phy_get_parent_count(np);
+	if (!num_phys)
+		return 0;
+
+	phy_bulk = kmalloc_array(num_phys, sizeof(*phy_bulk), GFP_KERNEL);
+	if (!phy_bulk)
+		return -ENOMEM;
+
+	ret = of_phy_bulk_get(np, num_phys, phy_bulk);
+	if (ret) {
+		kfree(phy_bulk);
+		return ret;
+	}
+
+	*phys = phy_bulk;
+	return num_phys;
+}
+
+int __must_check devm_phy_bulk_get_all(struct device *dev,
+				       struct phy_bulk_data **phys)
+{
+	struct phy_bulk_devres *devres;
+	int ret;
+
+	devres = devres_alloc(devm_phy_bulk_release,
+			      sizeof(*devres), GFP_KERNEL);
+	if (!devres)
+		return -ENOMEM;
+
+	ret = phy_bulk_get_all(dev, &devres->phys);
+	if (ret > 0) {
+		*phys = devres->phys;
+		devres->num_phys = ret;
+		devres_add(dev, devres);
+	} else {
+		devres_free(devres);
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(devm_phy_bulk_get_all);
+
 /**
  * phy_create() - create a new phy
  * @dev: device that is creating the new phy

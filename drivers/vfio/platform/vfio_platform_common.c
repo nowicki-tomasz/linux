@@ -240,6 +240,7 @@ static void vfio_platform_release(void *device_data)
 			WARN_ON(1);
 		}
 
+		vfio_platform_phy_cleanup(vdev);
 		vfio_platform_intercon_cleanup(vdev);
 		vfio_platform_regulator_cleanup(vdev);
 		vfio_platform_clk_cleanup(vdev);
@@ -290,6 +291,10 @@ static int vfio_platform_open(void *device_data)
 		if (ret < 0)
 			goto err_rst;
 
+		ret = vfio_platform_phy_init(vdev);
+		if (ret < 0)
+			goto err_rst;
+
 		ret = vfio_platform_call_reset(vdev, &extra_dbg);
 		if (ret && vdev->reset_required) {
 			dev_warn(vdev->device, "reset driver is required and reset call failed in open (%d) %s\n",
@@ -324,7 +329,7 @@ static long vfio_platform_ioctl(void *device_data,
 	if (cmd == VFIO_DEVICE_GET_INFO) {
 		struct vfio_device_info info;
 
-		minsz = offsetofend(struct vfio_device_info, num_interconnects);
+		minsz = offsetofend(struct vfio_device_info, num_phys);
 
 		if (copy_from_user(&info, (void __user *)arg, minsz))
 			return -EFAULT;
@@ -340,6 +345,7 @@ static long vfio_platform_ioctl(void *device_data,
 		info.num_clks = vdev->clk_res.num_clks;
 		info.num_regulators = vdev->regulator_res.num_regulators;
 		info.num_interconnects = vdev->intercon_res.num_intercon;
+		info.num_phys = vdev->phy_res.num_phy;
 
 		return copy_to_user((void __user *)arg, &info, minsz) ?
 			-EFAULT : 0;
@@ -682,6 +688,8 @@ static int vfio_platform_vhost_req(void *device_data,
 		return vfio_platform_regulator_handle_req(vdev, req);
 	case VIRTIO_ID_INTERCONNECT:
 		return vfio_platform_intercon_handle_req(vdev, req);
+	case VIRTIO_ID_PHY:
+		return vfio_platform_phy_handle_req(vdev, req);
 	default:
 		dev_err(vdev->device, "unsupported device type\n");
 
@@ -709,6 +717,10 @@ static int vfio_platform_vhost_register(void *device_data,
 							info->add);
 	case VIRTIO_ID_INTERCONNECT:
 		return vfio_platform_intercon_register_vhost(vdev, info->vhost,
+							info->vhost_dev_index,
+							info->add);
+	case VIRTIO_ID_PHY:
+		return vfio_platform_phy_register_vhost(vdev, info->vhost,
 							info->vhost_dev_index,
 							info->add);
 	default:

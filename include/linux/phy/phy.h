@@ -175,6 +175,11 @@ struct phy_lookup {
 	struct phy *phy;
 };
 
+struct phy_bulk_data {
+	const char *id;
+	struct phy *phy;
+};
+
 #define	to_phy(a)	(container_of((a), struct phy, dev))
 
 #define	of_phy_provider_register(dev, xlate)	\
@@ -239,6 +244,7 @@ struct phy *devm_of_phy_get(struct device *dev, struct device_node *np,
 			    const char *con_id);
 struct phy *devm_of_phy_get_by_index(struct device *dev, struct device_node *np,
 				     int index);
+int devm_phy_bulk_get_all(struct device *dev, struct phy_bulk_data **phys);
 void phy_put(struct phy *phy);
 void devm_phy_put(struct device *dev, struct phy *phy);
 struct phy *of_phy_get(struct device_node *np, const char *con_id);
