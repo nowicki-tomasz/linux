@@ -55,3 +55,11 @@ config VFIO_PLATFORM_QCOM_WIFI_RESET
 	  Enables the VFIO platform driver to handle reset for WiFi
 
 	  If you don't know what to do here, say N.
+
+config VFIO_PLATFORM_QCOM_SDHCI_RESET
+	tristate "VFIO support for Qualcomm SDHCI reset"
+	depends on VFIO_PLATFORM
+	help
+	  Enables the VFIO platform driver to handle reset for SDHCI
+
+	  If you don't know what to do here, say N.
