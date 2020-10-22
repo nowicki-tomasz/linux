@@ -185,4 +185,20 @@ struct virtio_vfio_regulator_event {
 	unsigned long			new_vol;
 } __attribute__((packed));
 
+/* Interconnect */
+
+/* Interconnect request types */
+#define VIRTIO_VFIO_REQ_INTER_SET	0x01
+
+struct virtio_vfio_inter_set {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				avg_bw;
+	__le64				peak_bw;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+
+struct virtio_vfio_inter_event {
+	unsigned long			msg;
+} __attribute__((packed));
 #endif
