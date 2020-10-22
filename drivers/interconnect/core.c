@@ -783,6 +783,142 @@ void icc_put(struct icc_path *path)
 }
 EXPORT_SYMBOL_GPL(icc_put);
 
+static unsigned int of_icc_get_count(struct device_node *np)
+{
+	int count;
+
+	np = of_node_get(np);
+	if (!np)
+		return 0;
+	count = of_count_phandle_with_args(np, "interconnects",
+					   "#interconnect-cells");
+	of_node_put(np);
+
+	if (count < 0)
+		return 0;
+
+	return count;
+}
+
+static int __must_check of_icc_bulk_get(struct device *dev, int num_intercon,
+					struct icc_bulk_data *paths)
+{
+	struct device_node *np = dev->of_node;
+	int ret;
+	int i;
+
+	for (i = 0; i < num_intercon; i++) {
+		paths[i].name = NULL;
+		paths[i].icc_path = NULL;
+	}
+
+	for (i = 0; i < num_intercon; i++) {
+		of_property_read_string_index(np, "interconnect-names", i,
+					      &paths[i].name);
+		paths[i].icc_path = of_icc_get_by_index(dev, i);
+		if (IS_ERR(paths[i].icc_path)) {
+			ret = PTR_ERR(paths[i].icc_path);
+			pr_err("%pOF: Failed to get clk index: %d ret: %d\n",
+			       np, i, ret);
+			paths[i].icc_path = NULL;
+			goto err;
+		}
+	}
+
+	return 0;
+
+err:
+	icc_bulk_put(i, paths);
+
+	return ret;
+}
+
+
+int __must_check icc_bulk_get_all(struct device *dev,
+				  struct icc_bulk_data **paths)
+{
+	struct icc_bulk_data *path_bulk;
+	int count, num_intercon;
+	struct device_node *np;
+	int ret;
+
+	if (!dev || !dev->of_node)
+		return -ENODEV;
+
+	np = dev->of_node;
+
+	count = of_icc_get_count(np);
+	if (!count)
+		return 0;
+
+	/* two phandles when #interconnect-cells = <1> */
+	if (count % 2) {
+		pr_err("%s: Invalid interconnects values\n", __func__);
+		return -EINVAL;
+	}
+
+	num_intercon = count / 2;
+	path_bulk = kmalloc_array(num_intercon, sizeof(*path_bulk), GFP_KERNEL);
+	if (!path_bulk)
+		return -ENOMEM;
+
+	ret = of_icc_bulk_get(dev, num_intercon, path_bulk);
+	if (ret) {
+		kfree(path_bulk);
+		return ret;
+	}
+
+	*paths = path_bulk;
+
+	return num_intercon;
+}
+EXPORT_SYMBOL_GPL(icc_bulk_get_all);
+
+void icc_bulk_put(int num_intercon, struct icc_bulk_data *paths)
+{
+	while (--num_intercon >= 0) {
+		icc_put(paths[num_intercon].icc_path);
+		paths[num_intercon].icc_path = NULL;
+	}
+}
+EXPORT_SYMBOL_GPL(icc_bulk_put);
+
+struct icc_bulk_devres {
+	struct icc_bulk_data *paths;
+	int num_intercon;
+};
+
+static void devm_icc_bulk_release(struct device *dev, void *res)
+{
+	struct icc_bulk_devres *devres = res;
+
+	icc_bulk_put(devres->num_intercon, devres->paths);
+}
+
+int __must_check devm_icc_bulk_get_all(struct device *dev,
+				       struct icc_bulk_data **paths)
+{
+	struct icc_bulk_devres *devres;
+	int ret;
+
+	devres = devres_alloc(devm_icc_bulk_release,
+			      sizeof(*devres), GFP_KERNEL);
+	if (!devres)
+		return -ENOMEM;
+
+	ret = icc_bulk_get_all(dev, &devres->paths);
+	if (ret > 0) {
+		*paths = devres->paths;
+		devres->num_intercon = ret;
+		devres_add(dev, devres);
+	} else {
+		devres_free(devres);
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(devm_icc_bulk_get_all);
+
 static struct icc_node *icc_node_create_nolock(int id)
 {
 	struct icc_node *node;

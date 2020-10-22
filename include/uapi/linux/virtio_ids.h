@@ -50,6 +50,7 @@
 #define VIRTIO_ID_VIDEO_DEC    31 /* virtio video decoder */
 #define VIRTIO_ID_CLK          32 /* virtio clock */
 #define VIRTIO_ID_REGULATOR    33 /* virtio regulator */
+#define VIRTIO_ID_INTERCONNECT 34 /* virtio interconnect */
 
 /* Chrome OS-specific devices */
 #define VIRTIO_ID_WL           63 /* virtio wayland */
