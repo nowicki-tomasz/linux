@@ -796,6 +796,12 @@ int vfio_platform_probe_common(struct vfio_platform_device *vdev,
 		return ret;
 	}
 
+	ret = vdev->of_reset(vdev);
+	if (ret) {
+		dev_err(dev, "Reset function filed for device %s\n", vdev->name);
+		return ret;
+	}
+
 	group = vfio_iommu_group_get(dev);
 	if (!group) {
 		dev_err(dev, "No IOMMU group for device %s\n", vdev->name);
