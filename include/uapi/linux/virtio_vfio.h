@@ -201,4 +201,32 @@ struct virtio_vfio_inter_set {
 struct virtio_vfio_inter_event {
 	unsigned long			msg;
 } __attribute__((packed));
+
+/* PHY */
+
+/* PHY request types */
+#define VIRTIO_VFIO_REQ_PHY_INIT	0x1
+#define VIRTIO_VFIO_REQ_PHY_EXIT	0x2
+#define VIRTIO_VFIO_REQ_PHY_SET_MODE	0x3
+#define VIRTIO_VFIO_REQ_PHY_POWER_ON	0x4
+#define VIRTIO_VFIO_REQ_PHY_POWER_OFF	0x5
+#define VIRTIO_VFIO_REQ_PHY_RESET	0x6
+#define VIRTIO_VFIO_REQ_PHY_CALIBRATE	0x7
+#define VIRTIO_VFIO_REQ_PHY_RELEASE	0x8
+
+struct virtio_vfio_phy_msg {
+	struct virtio_vfio_req_hdr	hdr;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_phy_mode {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				mode;
+	__le64				submode;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_phy_event {
+	unsigned long			msg;
+} __attribute__((packed));
 #endif

@@ -51,6 +51,7 @@
 #define VIRTIO_ID_CLK          32 /* virtio clock */
 #define VIRTIO_ID_REGULATOR    33 /* virtio regulator */
 #define VIRTIO_ID_INTERCONNECT 34 /* virtio interconnect */
+#define VIRTIO_ID_PHY          35 /* virtio phy */
 
 /* Chrome OS-specific devices */
 #define VIRTIO_ID_WL           63 /* virtio wayland */

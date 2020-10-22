@@ -49,6 +49,14 @@ config PHY_XGENE
 	help
 	  This option enables support for APM X-Gene SoC multi-purpose PHY.
 
+config PHY_VIRTIO
+	tristate "Virtio PHY support"
+	depends on OF && VIRTIO
+	select GENERIC_PHY
+	select VIRTIO_TRANSPORT
+	help
+	  This option enables support for APM X-Gene SoC multi-purpose PHY.
+
 source "drivers/phy/allwinner/Kconfig"
 source "drivers/phy/amlogic/Kconfig"
 source "drivers/phy/broadcom/Kconfig"
