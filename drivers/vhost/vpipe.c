@@ -42,6 +42,9 @@ enum {
 struct vhost_vfio {
 	struct vhost_dev	dev;
 	struct vhost_virtqueue	vqs[VHOST_VFIO_VQ_MAX];
+
+	struct vfio_device	*vfio_dev_consumer;
+	struct vhost_vfio_dev_info info;
 };
 
 static void vhost_pipe_flush(struct vhost_vfio *vv)
@@ -126,6 +129,34 @@ static int vhost_pipe_set_features(struct vhost_vfio *vv, u64 features)
 	return 0;
 }
 
+static long vhost_pipe_set_fd(struct vhost_vfio *vv, void __user *argp)
+{
+	struct vhost_vfio_dev_info info;
+	struct fd f;
+	int fd, r = 0;
+
+	if (copy_from_user(&info, argp, sizeof(info)))
+		return -EFAULT;
+
+	fd = info.vfio_consumer_fd;
+
+	mutex_lock(&vv->dev.mutex);
+
+	f = fdget(fd);
+	if (!f.file) {
+		r = -EBADF;
+		goto out;
+	}
+
+	vv->vfio_dev_consumer = f.file->private_data;
+	vv->info = info;
+	fdput(f);
+
+out:
+	mutex_unlock(&vv->dev.mutex);
+	return r;
+}
+
 static void vhost_vfio_event_work(struct vhost_work *work)
 {
 }
@@ -153,6 +184,8 @@ static long vhost_pipe_ioctl(struct file *f, unsigned int ioctl,
 		return vhost_pipe_reset_owner(vv);
 	case VHOST_SET_OWNER:
 		return vhost_pipe_set_owner(vv);
+	case VHOST_VFIO_SET_FD:
+		return vhost_pipe_set_fd(vv, argp);
 	default:
 		mutex_lock(&vv->dev.mutex);
 		r = vhost_dev_ioctl(&vv->dev, ioctl, argp);
