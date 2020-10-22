@@ -13,6 +13,7 @@
 #include <linux/types.h>
 #include <linux/vfio.h>
 #include <linux/vhost_vfio.h>
+#include <linux/virtio_vfio.h>
 
 #include "vfio_platform_private.h"
 
@@ -131,4 +132,98 @@ void vfio_platform_clk_cleanup(struct vfio_platform_device *vdev)
 					&vdev->clk_nb);
 		clk_res->vdev[i] = NULL;
 	}
+}
+
+static int vfio_platform_clk_resp(struct vfio_vhost_req *req, int errno,
+				  int vhost_err)
+{
+	struct virtio_vfio_req_hdr *req_hdr =
+				(struct virtio_vfio_req_hdr *)req->vq_req;
+	struct virtio_vfio_resp_status *status;
+
+	/* Skip buffer space */
+	status = (struct virtio_vfio_resp_status *)(req->vq_resp +
+					req_hdr->resp_len - sizeof(*status));
+	status->status = vhost_err;
+	return errno;
+}
+
+int vfio_platform_clk_handle_req(struct vfio_platform_device *vdev,
+				 struct vfio_vhost_req *req)
+{
+	struct virtio_vfio_req *req_msg = (struct virtio_vfio_req *)req->vq_req;
+	struct virtio_vfio_req_hdr *req_hdr =
+					(struct virtio_vfio_req_hdr *)req_msg;
+	uint32_t index = req->dev_idx;
+	size_t status_sz = sizeof(struct virtio_vfio_resp_status);
+	struct clk_bulk_data *clk_bulk = vdev->clk_res.clk_bulk;
+	uint64_t set_rate, *get_rate, *flags, *round_rate;
+	int ret = 0;
+
+	if (index > vdev->clk_res.num_clks - 1) {
+		dev_err(vdev->device, "Index out of range\n");
+		return vfio_platform_clk_resp(req, -EINVAL,
+					      VIRTIO_VFIO_S_INVAL);
+	}
+
+	switch (req_hdr->req_type) {
+	case VIRTIO_VFIO_REQ_CLK_ENABLE:
+		ret = clk_enable(clk_bulk[index].clk);
+		break;
+	case VIRTIO_VFIO_REQ_CLK_DISABLE:
+		clk_disable(clk_bulk[index].clk);
+		break;
+	case VIRTIO_VFIO_REQ_CLK_PREPARE:
+		ret = clk_prepare(clk_bulk[index].clk);
+		break;
+	case VIRTIO_VFIO_REQ_CLK_UNPREPARE:
+		clk_unprepare(clk_bulk[index].clk);
+		break;
+	case VIRTIO_VFIO_REQ_CLK_RECALC_RATE:
+		if (req_hdr->resp_len - status_sz < sizeof(*get_rate)) {
+			ret = -EINVAL;
+			break;
+		}
+
+		get_rate = (uint64_t *)req->vq_resp;
+		*get_rate = clk_get_rate_recalc(clk_bulk[index].clk);
+		break;
+      case VIRTIO_VFIO_REQ_CLK_ROUND_RATE:
+		if (req_hdr->resp_len - status_sz < sizeof(*round_rate)) {
+			ret = -EINVAL;
+			break;
+		}
+
+		set_rate = ((uint64_t *)req_msg->buf)[0];
+		round_rate = (uint64_t *)req->vq_resp;
+		*round_rate = clk_round_rate(clk_bulk[index].clk, set_rate);
+
+		break;
+	case VIRTIO_VFIO_REQ_CLK_SET_RATE:
+		if (req_hdr->req_len < sizeof(set_rate)) {
+			ret = -EINVAL;
+			break;
+		}
+
+		set_rate = ((uint64_t *)req_msg->buf)[1];
+		ret = clk_set_rate(clk_bulk[index].clk, set_rate);
+		if (ret)
+			dev_err(vdev->device, "clock set rate failed\n");
+		break;
+	case VIRTIO_VFIO_REQ_CLK_GET_FLAGS:
+		if (req_hdr->resp_len - status_sz < sizeof(*flags)) {
+			ret = -EINVAL;
+			break;
+		}
+
+		flags = (uint64_t *)req->vq_resp;
+		*flags = __clk_get_flags(clk_bulk[index].clk);
+		break;
+	default:
+		ret = -ENOSYS;
+		break;
+	}
+
+	return vfio_platform_clk_resp(req, ret,
+				      ret ? VIRTIO_VFIO_S_IOERR : 0);
 }
