@@ -229,4 +229,18 @@ struct virtio_vfio_phy_mode {
 struct virtio_vfio_phy_event {
 	unsigned long			msg;
 } __attribute__((packed));
+
+/* PINCTRL */
+
+/* PINCTRL request types */
+#define VIRTIO_VFIO_REQ_PINCTRL_SELECT	0x1
+
+struct virtio_vfio_pinctrl_msg {
+	struct virtio_vfio_req_hdr	hdr;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_pinctrl_event {
+	unsigned long			msg;
+} __attribute__((packed));
 #endif

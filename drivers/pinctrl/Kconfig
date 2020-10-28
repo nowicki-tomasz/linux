@@ -384,6 +384,12 @@ config PINCTRL_OCELOT
 	select OF_GPIO
 	select REGMAP_MMIO
 
+config PINCTRL_VIRTIO
+	bool "Virtio pinctrl driver"
+	depends on OF && VIRTIO
+	select VIRTIO_TRANSPORT
+	select GENERIC_PINCONF
+
 source "drivers/pinctrl/actions/Kconfig"
 source "drivers/pinctrl/aspeed/Kconfig"
 source "drivers/pinctrl/bcm/Kconfig"
