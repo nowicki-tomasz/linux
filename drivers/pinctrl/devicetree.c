@@ -63,7 +63,8 @@ void pinctrl_dt_free_maps(struct pinctrl *p)
 
 static int dt_remember_or_free_map(struct pinctrl *p, const char *statename,
 				   struct pinctrl_dev *pctldev,
-				   struct pinctrl_map *map, unsigned num_maps)
+				   struct pinctrl_map *map, unsigned num_maps,
+				   int index)
 {
 	int i;
 	struct pinctrl_dt_map *dt_map;
@@ -78,6 +79,7 @@ static int dt_remember_or_free_map(struct pinctrl *p, const char *statename,
 
 		map[i].dev_name = devname;
 		map[i].name = statename;
+		map[i].idx = index;
 		if (pctldev)
 			map[i].ctrl_dev_name = dev_name(pctldev->dev);
 	}
@@ -107,7 +109,7 @@ struct pinctrl_dev *of_pinctrl_get(struct device_node *np)
 static int dt_to_map_one_config(struct pinctrl *p,
 				struct pinctrl_dev *hog_pctldev,
 				const char *statename,
-				struct device_node *np_config)
+				struct device_node *np_config, int index)
 {
 	struct pinctrl_dev *pctldev = NULL;
 	struct device_node *np_pctldev;
@@ -164,7 +166,8 @@ static int dt_to_map_one_config(struct pinctrl *p,
 		return ret;
 
 	/* Stash the mapping table chunk away for later use */
-	return dt_remember_or_free_map(p, statename, pctldev, map, num_maps);
+	return dt_remember_or_free_map(p, statename, pctldev, map, num_maps,
+				       index);
 }
 
 static int dt_remember_dummy_state(struct pinctrl *p, const char *statename)
@@ -178,7 +181,7 @@ static int dt_remember_dummy_state(struct pinctrl *p, const char *statename)
 	/* There is no pctldev for PIN_MAP_TYPE_DUMMY_STATE */
 	map->type = PIN_MAP_TYPE_DUMMY_STATE;
 
-	return dt_remember_or_free_map(p, statename, NULL, map, 1);
+	return dt_remember_or_free_map(p, statename, NULL, map, 1, 0);
 }
 
 bool pinctrl_dt_has_hogs(struct pinctrl_dev *pctldev)
@@ -262,7 +265,7 @@ int pinctrl_dt_to_map(struct pinctrl *p, struct pinctrl_dev *pctldev)
 
 			/* Parse the node */
 			ret = dt_to_map_one_config(p, pctldev, statename,
-						   np_config);
+						   np_config, state);
 			of_node_put(np_config);
 			if (ret < 0)
 				goto err;

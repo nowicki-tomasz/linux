@@ -2,6 +2,7 @@
 vfio-platform-base-y := vfio_platform_common.o vfio_platform_irq.o
 vfio-platform-base-y += vfio_platform_clk.o vfio_platform_regulator.o
 vfio-platform-base-y += vfio_platform_interconnect.o vfio_platform_phy.o
+vfio-platform-base-y += vfio_platform_pinctrl.o
 vfio-platform-y := vfio_platform.o
 
 obj-$(CONFIG_VFIO_PLATFORM) += vfio-platform.o

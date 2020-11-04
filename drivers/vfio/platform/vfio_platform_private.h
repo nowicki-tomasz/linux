@@ -65,6 +65,12 @@ struct phy_devres {
 	int				num_phy;
 };
 
+struct pinctrl_devres {
+	struct pinctrl			*pinctrl;
+	struct vhost_dev 		**vdev;
+	int				num_pinctrl;
+};
+
 struct vfio_platform_device {
 	struct vfio_platform_region	*regions;
 	u32				num_regions;
@@ -82,6 +88,7 @@ struct vfio_platform_device {
 	struct regulator_devres		regulator_res;
 	struct intercon_devres		intercon_res;
 	struct phy_devres		phy_res;
+	struct pinctrl_devres		pinctrl_res;
 
 	/*
 	 * These fields should be filled by the bus specific binder
@@ -152,6 +159,14 @@ int vfio_platform_phy_register_vhost(struct vfio_platform_device *vdev,
 void vfio_platform_phy_cleanup(struct vfio_platform_device *vdev);
 int vfio_platform_phy_handle_req(struct vfio_platform_device *vdev,
 				   struct vfio_vhost_req *req);
+
+int vfio_platform_pinctrl_init(struct vfio_platform_device *vdev);
+int vfio_platform_pinctrl_register_vhost(struct vfio_platform_device *vdev,
+				     struct vhost_dev *vhost, int index,
+				     bool add);
+void vfio_platform_pinctrl_cleanup(struct vfio_platform_device *vdev);
+int vfio_platform_pinctrl_handle_req(struct vfio_platform_device *vdev,
+				     struct vfio_vhost_req *req);
 
 extern void __vfio_platform_register_reset(struct vfio_platform_reset_node *n);
 extern void vfio_platform_unregister_reset(const char *compat,

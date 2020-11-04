@@ -921,6 +921,18 @@ static struct pinctrl_state *find_state(struct pinctrl *p,
 	return NULL;
 }
 
+static struct pinctrl_state *find_state_idx(struct pinctrl *p,
+					    unsigned idx)
+{
+	struct pinctrl_state *state;
+
+	list_for_each_entry(state, &p->states, node)
+		if (state->idx == idx)
+			return state;
+
+	return NULL;
+}
+
 static struct pinctrl_state *create_state(struct pinctrl *p,
 					  const char *name)
 {
@@ -946,8 +958,11 @@ static int add_setting(struct pinctrl *p, struct pinctrl_dev *pctldev,
 	int ret;
 
 	state = find_state(p, map->name);
-	if (!state)
+	if (!state) {
 		state = create_state(p, map->name);
+		if (!IS_ERR(state))
+			state->idx = map->idx;
+	}
 	if (IS_ERR(state))
 		return PTR_ERR(state);
 
@@ -1219,6 +1234,33 @@ struct pinctrl_state *pinctrl_lookup_state(struct pinctrl *p,
 	return state;
 }
 EXPORT_SYMBOL_GPL(pinctrl_lookup_state);
+
+/**
+ * pinctrl_count_state() - retrieves the number of states from a pinctrl handle
+ * @p: the pinctrl handle to retrieve the number of states
+ */
+unsigned pinctrl_count_state(struct pinctrl *p)
+{
+	struct pinctrl_state *state;
+	unsigned count = 0;
+
+	list_for_each_entry(state, &p->states, node)
+		count++;
+
+	return count;
+}
+EXPORT_SYMBOL_GPL(pinctrl_count_state);
+
+/**
+ * pinctrl_lookup_state_idx() - retrieves a state handle from a pinctrl handle
+ * @p: the pinctrl handle to retrieve the state from
+ * @name: the index to retrieve
+ */
+struct pinctrl_state *pinctrl_lookup_state_idx(struct pinctrl *p, unsigned idx)
+{
+	return find_state_idx(p, idx);
+}
+EXPORT_SYMBOL_GPL(pinctrl_lookup_state_idx);
 
 static void pinctrl_link_add(struct pinctrl_dev *pctldev,
 			     struct device *consumer)

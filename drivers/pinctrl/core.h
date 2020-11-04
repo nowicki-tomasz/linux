@@ -88,11 +88,13 @@ struct pinctrl {
  * @node: list node for struct pinctrl's @states field
  * @name: the name of this state
  * @settings: a list of settings for this state
+ * @idx: the index of this state
  */
 struct pinctrl_state {
 	struct list_head node;
 	const char *name;
 	struct list_head settings;
+	unsigned idx;
 };
 
 /**

@@ -62,6 +62,7 @@ struct pinctrl_map_configs {
  * @ctrl_dev_name: the name of the device controlling this specific mapping,
  *	the name must be the same as in your struct device*. This field is not
  *	used for PIN_MAP_TYPE_DUMMY_STATE
+ * @idx: the index of related pinctrl-* specifier
  * @data: Data specific to the mapping type
  */
 struct pinctrl_map {
@@ -69,6 +70,7 @@ struct pinctrl_map {
 	const char *name;
 	enum pinctrl_map_type type;
 	const char *ctrl_dev_name;
+	unsigned idx;
 	union {
 		struct pinctrl_map_mux mux;
 		struct pinctrl_map_configs configs;
