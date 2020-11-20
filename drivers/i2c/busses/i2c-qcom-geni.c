@@ -505,6 +505,21 @@ static int geni_i2c_probe(struct platform_device *pdev)
 	int ret;
 	struct device *dev = &pdev->dev;
 
+	dev_err(&pdev->dev, "%s name %s ((((((((((((((((((((((((((((((((((((((( \n",
+		__func__, pdev->dev.of_node->name);
+
+	if (!strcmp(dev_name(&pdev->dev), "888000.i2c"))
+		return -ENOMEM;
+
+	if (!strcmp(dev_name(&pdev->dev), "890000.i2c"))
+		return -ENOMEM;
+
+	if (!strcmp(dev_name(&pdev->dev), "894000.i2c"))
+		return -ENOMEM;
+
+	dev_err(&pdev->dev, "%s ((((((((((((((((((((((((((((((((((((((( keep probing\n",
+		__func__);
+
 	gi2c = devm_kzalloc(dev, sizeof(*gi2c), GFP_KERNEL);
 	if (!gi2c)
 		return -ENOMEM;

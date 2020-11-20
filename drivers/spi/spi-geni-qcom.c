@@ -592,6 +592,15 @@ static int spi_geni_probe(struct platform_device *pdev)
 	struct clk *clk;
 	struct device *dev = &pdev->dev;
 
+	dev_err(&pdev->dev, "%s name %s ((((((((((((((((((((((((((((((((((((((( \n",
+		__func__, pdev->dev.of_node->name);
+
+	if (!strcmp(dev_name(&pdev->dev), "880000.spi"))
+		return -ENOMEM;
+
+	dev_err(&pdev->dev, "%s ((((((((((((((((((((((((((((((((((((((( keep probing\n",
+		__func__);
+
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
 		return irq;
