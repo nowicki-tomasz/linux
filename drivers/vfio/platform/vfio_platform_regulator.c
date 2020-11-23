@@ -150,6 +150,8 @@ static int vfio_platform_regulator_resp(struct vfio_vhost_req *req, int errno,
 	return errno;
 }
 
+int regulator_set_mode_nocheck(struct regulator *regulator, unsigned int mode);
+
 int vfio_platform_regulator_handle_req(struct vfio_platform_device *vdev,
 				       struct vfio_vhost_req *req)
 {
@@ -162,6 +164,8 @@ int vfio_platform_regulator_handle_req(struct vfio_platform_device *vdev,
 	struct virtio_vfio_regulator_list_voltage *list_vol;
 	struct virtio_vfio_regulator_map_voltage *map_vol;
 	struct virtio_vfio_regulator_set_voltage *set_vol;
+	struct virtio_vfio_regulator_set_load *set_load;
+	struct virtio_vfio_regulator_set_mode *set_mode;
 	uint64_t *is_enabled, *get_cur_limit, *vol, *selector, *n_voltage,
 		*type;
 	int ret = 0;
@@ -286,6 +290,28 @@ int vfio_platform_regulator_handle_req(struct vfio_platform_device *vdev,
 		*selector = regulator_get_map_voltage(consumer,
 						      set_vol->min_uV,
 						      set_vol->max_uV);
+		break;
+	case VIRTIO_VFIO_REQ_REGULATOR_SET_LOAD:
+		if (req_hdr->req_len < sizeof(uint64_t)) {
+			ret = -EINVAL;
+			break;
+		}
+
+		set_load = (struct virtio_vfio_regulator_set_load *)req_msg;
+		ret = regulator_set_load(consumer, set_load->load_uA);
+		if (ret)
+			dev_err(vdev->device, "regulator_set_load failed\n");
+		break;
+	case VIRTIO_VFIO_REQ_REGULATOR_SET_MODE:
+		if (req_hdr->req_len < sizeof(uint64_t)) {
+			ret = -EINVAL;
+			break;
+		}
+
+		set_mode = (struct virtio_vfio_regulator_set_mode *)req_msg;
+		ret = regulator_set_mode_nocheck(consumer, set_mode->mode);
+		if (ret)
+			dev_err(vdev->device, "regulator_set_mode_nocheck failed\n");
 		break;
 	default:
 		ret = -ENOSYS;

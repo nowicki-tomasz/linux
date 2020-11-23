@@ -4234,6 +4234,20 @@ out:
 }
 EXPORT_SYMBOL_GPL(regulator_set_mode);
 
+int regulator_set_mode_nocheck(struct regulator *regulator, unsigned int mode)
+{
+	struct regulator_dev *rdev = regulator->rdev;
+	int ret;
+
+	regulator_lock(rdev);
+
+	ret = rdev->desc->ops->set_mode(rdev, mode);
+
+	regulator_unlock(rdev);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(regulator_set_mode_nocheck);
+
 static unsigned int _regulator_get_mode_unlocked(struct regulator_dev *rdev)
 {
 	/* sanity check */
