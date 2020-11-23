@@ -108,6 +108,8 @@ struct virtio_vfio_clk_event {
 #define VIRTIO_VFIO_REQ_REGULATOR_MAP_VOLTAGE		0x09
 #define VIRTIO_VFIO_REQ_REGULATOR_GET_VOLTAGE		0x0a
 #define VIRTIO_VFIO_REQ_REGULATOR_SET_VOLTAGE		0x0b
+#define VIRTIO_VFIO_REQ_REGULATOR_SET_LOAD		0x0c
+#define VIRTIO_VFIO_REQ_REGULATOR_SET_MODE		0x0d
 
 struct virtio_vfio_regulator_type {
 	struct virtio_vfio_req_hdr	hdr;
@@ -176,6 +178,18 @@ struct virtio_vfio_regulator_set_voltage {
 	__le64				min_uV;
 	__le64				max_uV;
 	__le64				selector;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_regulator_set_load {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				load_uA;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_regulator_set_mode {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				mode;
 	struct virtio_vfio_resp_status	resp;
 } __attribute__((packed));
 

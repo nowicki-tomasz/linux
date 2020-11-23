@@ -178,6 +178,35 @@ int virtio_regulator_set_voltage(struct regulator_dev *rdev,
 	return ret;
 }
 
+static int virtio_regulator_set_load(struct regulator_dev *rdev, int load_uA)
+{
+	struct virtio_reg_data *drvdata = rdev_get_drvdata(rdev);
+	struct virtio_vfio_regulator_set_load msg = {
+			.hdr.dev_type = VIRTIO_ID_REGULATOR,
+			.hdr.req_type = VIRTIO_VFIO_REQ_REGULATOR_SET_LOAD,
+			.hdr.req_len = sizeof(uint64_t),
+			.load_uA = load_uA,
+			.hdr.resp_len = sizeof(struct virtio_vfio_resp_status),
+	};
+
+	return WARN_ON(virtio_transport_send_req_sync(drvdata->virtio_trans, &msg,
+						      sizeof(msg)));
+}
+
+int virtio_regulator_set_mode(struct regulator_dev *rdev, unsigned int mode)
+{
+	struct virtio_reg_data *drvdata = rdev_get_drvdata(rdev);
+	struct virtio_vfio_regulator_set_mode msg = {
+			.hdr.dev_type = VIRTIO_ID_REGULATOR,
+			.hdr.req_type = VIRTIO_VFIO_REQ_REGULATOR_SET_MODE,
+			.hdr.req_len = sizeof(uint64_t),
+			.mode = mode,
+			.hdr.resp_len = sizeof(struct virtio_vfio_resp_status),
+	};
+
+	return WARN_ON(virtio_transport_send_req_sync(drvdata->virtio_trans, &msg,
+						      sizeof(msg)));
+}
 
 static struct regulator_ops virtio_regulator_ops = {
 	.enable = virtio_regulator_enable,
@@ -189,6 +218,8 @@ static struct regulator_ops virtio_regulator_ops = {
 	.map_voltage = virtio_regulator_map_voltage,
 	.get_voltage = virtio_regulator_get_voltage,
 	.set_voltage = virtio_regulator_set_voltage, // rdev->constraints->uV_offset must == 0
+	.set_load = virtio_regulator_set_load,
+	.set_mode = virtio_regulator_set_mode,
 
 };
 
@@ -230,6 +261,11 @@ static void virtio_regulator_evt_handler(struct virtqueue *vq)
 	}
 
 	virtqueue_kick(vq);
+}
+
+static unsigned int virtio_regulator_of_map_mode(unsigned int mode)
+{
+	return REGULATOR_MODE_NORMAL;
 }
 
 static int virtio_regulator_probe(struct virtio_device *vdev)
@@ -279,6 +315,7 @@ static int virtio_regulator_probe(struct virtio_device *vdev)
 
 	drvdata->desc.owner = THIS_MODULE;
 	drvdata->desc.ops = &virtio_regulator_ops;
+	drvdata->desc.of_map_mode = virtio_regulator_of_map_mode,
 
 	ret = virtio_transport_send_req_sync(drvdata->virtio_trans, &msg_type,
 					     sizeof(msg_type));
