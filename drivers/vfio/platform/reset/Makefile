@@ -14,3 +14,4 @@ obj-$(CONFIG_VFIO_PLATFORM_BCMFLEXRM_RESET) += vfio_platform_bcmflexrm.o
 obj-$(CONFIG_VFIO_PLATFORM_QCOM_WIFI_RESET) += vfio_platform_qcom_wifi.o
 obj-$(CONFIG_VFIO_PLATFORM_QCOM_SDHCI_RESET) += vfio_platform_qcom_sdhci.o
 obj-$(CONFIG_VFIO_PLATFORM_QCOM_XHCI_RESET) += vfio_platform_qcom_xhci.o
+obj-$(CONFIG_VFIO_PLATFORM_QCOM_GENIQUP_RESET) += vfio_platform_qcom_geniqup.o

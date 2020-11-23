@@ -405,6 +405,68 @@ static int of_platform_bus_create(struct device_node *bus,
 	return rc;
 }
 
+int of_platform_bus_create_debug(struct device_node *bus,
+				  const struct of_device_id *matches,
+				  const struct of_dev_auxdata *lookup,
+				  struct device *parent, bool strict)
+{
+	const struct of_dev_auxdata *auxdata;
+	struct device_node *child;
+	struct platform_device *dev;
+	const char *bus_id = NULL;
+	void *platform_data = NULL;
+	int rc = 0;
+
+	/* Make sure it has a compatible property */
+	if (strict && (!of_get_property(bus, "compatible", NULL))) {
+		pr_err("%s() - skipping %pOF, no compatible prop\n",
+			 __func__, bus);
+		return 0;
+	}
+
+	/* Skip nodes for which we don't want to create devices */
+	if (unlikely(of_match_node(of_skipped_node_table, bus))) {
+		pr_err("%s() - skipping %pOF node\n", __func__, bus);
+		return 0;
+	}
+
+	if (of_node_check_flag(bus, OF_POPULATED_BUS)) {
+		pr_err("%s() - skipping %pOF, already populated\n",
+			__func__, bus);
+		return 0;
+	}
+
+	auxdata = of_dev_lookup(lookup, bus);
+	if (auxdata) {
+		bus_id = auxdata->name;
+		platform_data = auxdata->platform_data;
+	}
+
+	if (of_device_is_compatible(bus, "arm,primecell")) {
+		/*
+		 * Don't return an error here to keep compatibility with older
+		 * device tree files.
+		 */
+		of_amba_device_create(bus, bus_id, platform_data, parent);
+		return 0;
+	}
+
+	dev = of_platform_device_create_pdata(bus, bus_id, platform_data, parent);
+	if (!dev || !of_match_node(matches, bus))
+		return 0;
+
+	for_each_child_of_node(bus, child) {
+		pr_err("   create child: %pOF\n", child);
+		rc = of_platform_bus_create(child, matches, lookup, &dev->dev, strict);
+		if (rc) {
+			of_node_put(child);
+			break;
+		}
+	}
+	of_node_set_flag(bus, OF_POPULATED_BUS);
+	return rc;
+}
+
 /**
  * of_platform_bus_probe() - Probe the device-tree for platform buses
  * @root: parent of the first level to probe or NULL for the root of the tree
@@ -477,8 +539,8 @@ int of_platform_populate(struct device_node *root,
 	if (!root)
 		return -EINVAL;
 
-	pr_debug("%s()\n", __func__);
-	pr_debug(" starting at: %pOF\n", root);
+	pr_err("%s()\n", __func__);
+	pr_err(" starting at: %pOF\n", root);
 
 	for_each_child_of_node(root, child) {
 		rc = of_platform_bus_create(child, matches, lookup, parent, true);

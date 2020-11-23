@@ -71,3 +71,11 @@ config VFIO_PLATFORM_QCOM_XHCI_RESET
 	  Enables the VFIO platform driver to handle reset for XHCI
 
 	  If you don't know what to do here, say N.
+
+config VFIO_PLATFORM_QCOM_GENIQUP_RESET
+	tristate "VFIO support for Qualcomm GENIQUP reset"
+	depends on VFIO_PLATFORM
+	help
+	  Enables the VFIO platform driver to handle reset for GENIQUP
+
+	  If you don't know what to do here, say N.
