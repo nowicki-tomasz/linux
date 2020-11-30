@@ -247,10 +247,49 @@ struct virtio_vfio_phy_event {
 /* PINCTRL */
 
 /* PINCTRL request types */
-#define VIRTIO_VFIO_REQ_PINCTRL_SELECT	0x1
+#define VIRTIO_VFIO_REQ_PINCTRL_SELECT		0x1
+#define VIRTIO_VFIO_REQ_GPIO_DIR_IN		0x2
+#define VIRTIO_VFIO_REQ_GPIO_DIR_OUT		0x3
+#define VIRTIO_VFIO_REQ_GPIO_GET_DIR		0x4
+#define VIRTIO_VFIO_REQ_GPIO_GET_VAL		0x5
+#define VIRTIO_VFIO_REQ_GPIO_SET_VAL		0x6
+#define VIRTIO_VFIO_REQ_GPIO_GET_NR_DESC	0x7
 
 struct virtio_vfio_pinctrl_msg {
 	struct virtio_vfio_req_hdr	hdr;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_gpio_dir_input_msg {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				offset;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_gpio_dir_output_msg {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				offset;
+	__le64				val;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_pinctrl_dir_msg {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				offset;
+	__le64				dir;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_pinctrl_val_msg {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				offset;
+	__le64				val;
+	struct virtio_vfio_resp_status	resp;
+} __attribute__((packed));
+
+struct virtio_vfio_pinctrl_get_descs_msg {
+	struct virtio_vfio_req_hdr	hdr;
+	__le64				nr_desc;
 	struct virtio_vfio_resp_status	resp;
 } __attribute__((packed));
 

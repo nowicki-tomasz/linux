@@ -7,6 +7,7 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/gpio/driver.h>
 #include <linux/module.h>
 #include <linux/pinctrl/machine.h>
 #include <linux/pinctrl/pinctrl.h>
@@ -28,6 +29,7 @@ struct vfio_pinctrl_dev {
 	struct virtio_trans	*virtio_trans;
 	struct pinctrl_dev	*pctrl;
 	struct pinctrl_desc	desc;
+	struct gpio_chip	chip;
 };
 
 struct vfio_pingroup {
@@ -117,6 +119,151 @@ static const struct pinconf_ops virtio_pinconf_ops = {
 	.pin_config_group_set	= virtio_config_group_set,
 };
 
+static int virtio_gpio_direction_input(struct gpio_chip *chip, unsigned offset)
+{
+	struct vfio_pinctrl_dev *vpctrl = gpiochip_get_data(chip);
+	struct virtio_vfio_gpio_dir_input_msg msg = {
+			.hdr.dev_type = VIRTIO_ID_PINCTRL,
+			.hdr.req_type = VIRTIO_VFIO_REQ_GPIO_DIR_IN,
+			.hdr.req_len = sizeof(uint64_t),
+			.offset = offset,
+			.hdr.resp_len = sizeof(struct virtio_vfio_resp_status),
+	};
+
+	return WARN_ON(virtio_transport_send_req_sync(vpctrl->virtio_trans, &msg,
+						      sizeof(msg)));
+}
+
+static int virtio_gpio_direction_output(struct gpio_chip *chip, unsigned offset,
+					int value)
+{
+	struct vfio_pinctrl_dev *vpctrl = gpiochip_get_data(chip);
+	struct virtio_vfio_gpio_dir_output_msg msg = {
+			.hdr.dev_type = VIRTIO_ID_PINCTRL,
+			.hdr.req_type = VIRTIO_VFIO_REQ_GPIO_DIR_OUT,
+			.hdr.req_len = 2 * sizeof(uint64_t),
+			.offset = offset,
+			.val = value,
+			.hdr.resp_len = sizeof(struct virtio_vfio_resp_status),
+	};
+
+	return WARN_ON(virtio_transport_send_req_sync(vpctrl->virtio_trans, &msg,
+						      sizeof(msg)));
+}
+
+static int virtio_gpio_get_direction(struct gpio_chip *chip, unsigned int offset)
+{
+	struct vfio_pinctrl_dev *vpctrl = gpiochip_get_data(chip);
+	struct virtio_vfio_pinctrl_dir_msg msg = {
+			.hdr.dev_type = VIRTIO_ID_PINCTRL,
+			.hdr.req_type = VIRTIO_VFIO_REQ_GPIO_GET_DIR,
+			.hdr.req_len = sizeof(uint64_t),
+			.offset = offset,
+			.hdr.resp_len = sizeof(uint64_t) +
+					sizeof(struct virtio_vfio_resp_status),
+	};
+
+	WARN_ON(virtio_transport_send_req_sync(vpctrl->virtio_trans, &msg,
+					       sizeof(msg)));
+	return msg.dir;
+}
+
+static int virtio_gpio_get(struct gpio_chip *chip, unsigned offset)
+{
+	struct vfio_pinctrl_dev *vpctrl = gpiochip_get_data(chip);
+	struct virtio_vfio_pinctrl_val_msg msg = {
+			.hdr.dev_type = VIRTIO_ID_PINCTRL,
+			.hdr.req_type = VIRTIO_VFIO_REQ_GPIO_GET_VAL,
+			.hdr.req_len = sizeof(uint64_t),
+			.offset = offset,
+			.hdr.resp_len = sizeof(uint64_t) +
+					sizeof(struct virtio_vfio_resp_status),
+	};
+
+	WARN_ON(virtio_transport_send_req_sync(vpctrl->virtio_trans, &msg,
+					       sizeof(msg)));
+	return msg.val;
+}
+
+static void virtio_gpio_set(struct gpio_chip *chip, unsigned offset, int value)
+{
+	struct vfio_pinctrl_dev *vpctrl = gpiochip_get_data(chip);
+	struct virtio_vfio_pinctrl_val_msg msg = {
+			.hdr.dev_type = VIRTIO_ID_PINCTRL,
+			.hdr.req_type = VIRTIO_VFIO_REQ_GPIO_SET_VAL,
+			.hdr.req_len = 2 * sizeof(uint64_t),
+			.offset = offset,
+			.val = value,
+			.hdr.resp_len = sizeof(struct virtio_vfio_resp_status),
+	};
+
+	WARN_ON(virtio_transport_send_req_sync(vpctrl->virtio_trans, &msg,
+					       sizeof(msg)));
+}
+
+static int virtio_gpio_probe(struct vfio_pinctrl_dev *vpinctrl)
+{
+	struct gpio_chip *chip = &vpinctrl->chip;
+	struct device *dev = vpinctrl->dev;
+	int ret;
+	struct virtio_vfio_pinctrl_get_descs_msg msg = {
+		.hdr.dev_type = VIRTIO_ID_PINCTRL,
+		.hdr.req_type = VIRTIO_VFIO_REQ_GPIO_GET_NR_DESC,
+		.hdr.req_len = 0,
+		.hdr.resp_len = sizeof(uint64_t) +
+				sizeof(struct virtio_vfio_resp_status),
+	};
+
+	ret = virtio_transport_send_req_sync(vpinctrl->virtio_trans, &msg,
+					     sizeof(msg));
+	if (ret) {
+		dev_err(dev, "Failed to get GPIO number of desc (err = %d)\n", ret);
+		return ret;
+	}
+
+	chip->base = -1;
+	chip->ngpio = msg.nr_desc;
+	chip->label = dev_name(dev);
+	chip->parent = dev;
+	chip->owner = THIS_MODULE;
+	chip->of_node = dev->of_node;
+
+	chip->direction_input  = virtio_gpio_direction_input;
+	chip->direction_output = virtio_gpio_direction_output;
+	chip->get_direction    = virtio_gpio_get_direction;
+	chip->get              = virtio_gpio_get;
+	chip->set              = virtio_gpio_set;
+
+	ret = gpiochip_add_data(&vpinctrl->chip, vpinctrl);
+	if (ret) {
+		dev_err(dev, "Failed register gpiochip\n");
+		return ret;
+	}
+
+	/*
+	 * For DeviceTree-supported systems, the gpio core checks the
+	 * pinctrl's device node for the "gpio-ranges" property.
+	 * If it is present, it takes care of adding the pin ranges
+	 * for the driver. In this case the driver can skip ahead.
+	 *
+	 * In order to remain compatible with older, existing DeviceTree
+	 * files which don't set the "gpio-ranges" property or systems that
+	 * utilize ACPI the driver has to call gpiochip_add_pin_range().
+	 */
+	if (!of_property_read_bool(dev->of_node, "gpio-ranges")) {
+		dev_err(dev, "no 'gpio-ranges' exist, adding default\n");
+		ret = gpiochip_add_pin_range(chip, dev_name(dev), 0, 0,
+					     chip->ngpio);
+		if (ret) {
+			dev_err(dev, "Failed to add pin range\n");
+			gpiochip_remove(chip);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
 static void virtio_pinctrl_evt_handler(struct virtqueue *vq)
 {
 	struct vfio_pinctrl_dev *vpinctrl = vq->vdev->priv;
@@ -188,6 +335,12 @@ static int virtio_pinctrl_probe(struct virtio_device *vdev)
 	if (IS_ERR(vpinctrl->pctrl)) {
 		dev_err(dev, "Couldn't register pinctrl driver\n");
 		ret = PTR_ERR(vpinctrl->pctrl);
+		goto err;
+	}
+
+	ret = virtio_gpio_probe(vpinctrl);
+	if (ret) {
+		dev_err(dev, "Couldn't register GPIO chip\n");
 		goto err;
 	}
 
