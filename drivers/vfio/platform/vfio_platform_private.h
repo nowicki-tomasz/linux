@@ -69,6 +69,8 @@ struct pinctrl_devres {
 	struct pinctrl			*pinctrl;
 	struct vhost_dev 		**vdev;
 	int				num_pinctrl;
+	struct gpio_bulk_data		*gpio_bulk;
+	int				num_gpio_func;
 };
 
 struct vfio_platform_device {

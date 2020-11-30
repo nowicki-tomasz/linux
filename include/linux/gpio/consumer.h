@@ -35,6 +35,12 @@ struct gpio_descs {
 	struct gpio_desc *desc[];
 };
 
+struct gpio_bulk_data {
+	const char *func;
+	unsigned int ndescs;
+	struct gpio_desc **desc;
+};
+
 #define GPIOD_FLAGS_BIT_DIR_SET		BIT(0)
 #define GPIOD_FLAGS_BIT_DIR_OUT		BIT(1)
 #define GPIOD_FLAGS_BIT_DIR_VAL		BIT(2)
@@ -56,6 +62,8 @@ enum gpiod_flags {
 };
 
 #ifdef CONFIG_GPIOLIB
+
+int gpio_chip_hwgpio(const struct gpio_desc *desc);
 
 /* Return the number of GPIOs associated with a device / function */
 int gpiod_count(struct device *dev, const char *con_id);
@@ -83,6 +91,7 @@ struct gpio_descs *__must_check gpiod_get_array_optional(struct device *dev,
 							enum gpiod_flags flags);
 void gpiod_put(struct gpio_desc *desc);
 void gpiod_put_array(struct gpio_descs *descs);
+int gpiod_bulk_get_all(struct device *dev, struct gpio_bulk_data **bulk_data);
 
 struct gpio_desc *__must_check devm_gpiod_get(struct device *dev,
 					      const char *con_id,
@@ -106,6 +115,7 @@ devm_gpiod_get_array_optional(struct device *dev, const char *con_id,
 void devm_gpiod_put(struct device *dev, struct gpio_desc *desc);
 void devm_gpiod_unhinge(struct device *dev, struct gpio_desc *desc);
 void devm_gpiod_put_array(struct device *dev, struct gpio_descs *descs);
+int devm_gpiod_bulk_get_all(struct device *dev, struct gpio_bulk_data **bulk);
 
 int gpiod_get_direction(struct gpio_desc *desc);
 int gpiod_direction_input(struct gpio_desc *desc);
@@ -185,6 +195,11 @@ struct gpio_desc *devm_fwnode_get_index_gpiod_from_child(struct device *dev,
 
 #else /* CONFIG_GPIOLIB */
 
+static inline int gpio_chip_hwgpio(const struct gpio_desc *desc)
+{
+	return -EINVAL;
+}
+
 static inline int gpiod_count(struct device *dev, const char *con_id)
 {
 	return 0;
@@ -229,6 +244,12 @@ gpiod_get_array(struct device *dev, const char *con_id,
 static inline struct gpio_descs *__must_check
 gpiod_get_array_optional(struct device *dev, const char *con_id,
 			 enum gpiod_flags flags)
+{
+	return NULL;
+}
+
+static inline int gpiod_bulk_get_all(struct device *dev,
+				     struct gpio_bulk_data **bulk_data)
 {
 	return NULL;
 }
@@ -320,6 +341,11 @@ static inline void devm_gpiod_put_array(struct device *dev,
 	WARN_ON(descs);
 }
 
+static inline int devm_gpiod_bulk_get_all(struct device *dev,
+					  struct gpio_bulk_data **bulk);
+{
+	return 0;
+}
 
 static inline int gpiod_get_direction(const struct gpio_desc *desc)
 {

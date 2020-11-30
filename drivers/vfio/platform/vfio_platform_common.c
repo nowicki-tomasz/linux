@@ -9,6 +9,8 @@
 #include <linux/device.h>
 #include <linux/acpi.h>
 #include <linux/iommu.h>
+#include <linux/gpio/consumer.h>
+#include <linux/gpio/driver.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/pm_runtime.h>
@@ -334,7 +336,7 @@ static long vfio_platform_ioctl(void *device_data,
 	if (cmd == VFIO_DEVICE_GET_INFO) {
 		struct vfio_device_info info;
 
-		minsz = offsetofend(struct vfio_device_info, num_pctrl_states);
+		minsz = offsetofend(struct vfio_device_info, num_gpio);
 
 		if (copy_from_user(&info, (void __user *)arg, minsz))
 			return -EFAULT;
@@ -352,6 +354,7 @@ static long vfio_platform_ioctl(void *device_data,
 		info.num_interconnects = vdev->intercon_res.num_intercon;
 		info.num_phys = vdev->phy_res.num_phy;
 		info.num_pctrl_states = vdev->pinctrl_res.num_pinctrl;
+		info.num_gpio = vdev->pinctrl_res.num_gpio_func;
 
 		return copy_to_user((void __user *)arg, &info, minsz) ?
 			-EFAULT : 0;
@@ -458,6 +461,75 @@ static long vfio_platform_ioctl(void *device_data,
 		usr_data = (const void __user *)(uintptr_t)info.usr_data;
 		return copy_to_user((void __user *)usr_data, supply, sz) ?
 			-EFAULT : 0;
+
+	} else if (cmd == VFIO_DEVICE_GET_GPIO_INFO) {
+		struct vfio_gpio_info info;
+		const void __user *usr_data;
+		const char *func_name;
+		size_t sz;
+
+		minsz = offsetofend(struct vfio_gpio_info, pin_num);
+		if (copy_from_user(&info, (void __user *)arg, minsz))
+			return -EFAULT;
+
+		if ((info.argsz < minsz) ||
+		    (info.index >= vdev->pinctrl_res.num_gpio_func))
+			return -EINVAL;
+
+		func_name = vdev->pinctrl_res.gpio_bulk[info.index].func;
+		sz = strlen(func_name);
+		if (info.len < sz) {
+			info.len = sz;
+			return copy_to_user((void __user *)arg, &info, minsz) ?
+						-EFAULT : -ENOSPC;
+		}
+
+		info.pin_num = vdev->pinctrl_res.gpio_bulk[info.index].ndescs;
+		if (copy_to_user((void __user *)arg, &info, minsz))
+			return -EFAULT;
+
+		usr_data = (const void __user *)(uintptr_t)info.usr_data;
+		return copy_to_user((void __user *)usr_data, func_name, sz) ?
+			-EFAULT : 0;
+	} else if (cmd == VFIO_DEVICE_GET_GPIO_FUNC_INFO) {
+		struct vfio_gpio_func_info info;
+		struct gpio_desc *desc;
+		struct gpio_chip *gc;
+
+		minsz = offsetofend(struct vfio_gpio_func_info, flags);
+		if (copy_from_user(&info, (void __user *)arg, minsz))
+			return -EFAULT;
+
+		if ((info.argsz < minsz) ||
+		    (info.index >= vdev->pinctrl_res.num_gpio_func) ||
+		    (info.pin_idx >= vdev->pinctrl_res.gpio_bulk[info.index].ndescs))
+			return -EINVAL;
+
+		info.flags = 0;
+		desc = vdev->pinctrl_res.gpio_bulk[info.index].desc[info.pin_idx];
+		gc = gpiod_to_chip(desc);
+		if (!gc)
+			return -EINVAL;
+
+		if (gpiochip_line_is_active_low(gc, gpio_chip_hwgpio(desc)))
+			info.flags |= VFIO_GPIO_ACTIVE_LOW;
+
+		if (gpiochip_line_is_open_source(gc, gpio_chip_hwgpio(desc)))
+			info.flags |= VFIO_GPIO_OPEN_SOURCE;
+
+		if (gpiochip_line_is_open_drain(gc, gpio_chip_hwgpio(desc)))
+			info.flags |= VFIO_GPIO_OPEN_DRAIN;
+
+		if (!gpiochip_line_is_persistent(gc, gpio_chip_hwgpio(desc)))
+			info.flags |= VFIO_GPIO_TRANSITORY;
+
+		if (gpiochip_line_is_pull_up(gc, gpio_chip_hwgpio(desc)))
+			info.flags |= VFIO_GPIO_PULL_UP;
+
+		if (gpiochip_line_is_pull_down(gc, gpio_chip_hwgpio(desc)))
+			info.flags |= VFIO_GPIO_PULL_DOWN;
+
+		return copy_to_user((void __user *)arg, &info, minsz);
 
 	} else if (cmd == VFIO_DEVICE_RESET) {
 		return vfio_platform_call_reset(vdev, NULL);

@@ -534,6 +534,9 @@ void gpiochip_enable_irq(struct gpio_chip *chip, unsigned int offset);
 /* Line status inquiry for drivers */
 bool gpiochip_line_is_open_drain(struct gpio_chip *chip, unsigned int offset);
 bool gpiochip_line_is_open_source(struct gpio_chip *chip, unsigned int offset);
+bool gpiochip_line_is_active_low(struct gpio_chip *chip, unsigned int offset);
+bool gpiochip_line_is_pull_up(struct gpio_chip *chip, unsigned int offset);
+bool gpiochip_line_is_pull_down(struct gpio_chip *chip, unsigned int offset);
 
 /* Sleep persistence inquiry for drivers */
 bool gpiochip_line_is_persistent(struct gpio_chip *chip, unsigned int offset);

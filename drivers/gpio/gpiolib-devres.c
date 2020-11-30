@@ -330,6 +330,45 @@ devm_gpiod_get_array_optional(struct device *dev, const char *con_id,
 }
 EXPORT_SYMBOL_GPL(devm_gpiod_get_array_optional);
 
+struct gpio_bulk_devres {
+	struct gpio_bulk_data *bulk;
+	int num_func;
+};
+
+static void devm_gpiod_bulk_release(struct device *dev, void *res)
+{
+	struct gpio_bulk_devres *devres = res;
+	unsigned int i, j;
+
+	for (i = 0; i < devres->num_func; i++) {
+		for (j = 0; j < devres->bulk[i].ndescs; j++)
+			gpiod_put(devres->bulk[i].desc[j]);
+	}
+}
+
+int devm_gpiod_bulk_get_all(struct device *dev, struct gpio_bulk_data **bulk)
+{
+	struct gpio_bulk_devres *devres;
+	int ret;
+
+	devres = devres_alloc(devm_gpiod_bulk_release,
+			      sizeof(*devres), GFP_KERNEL);
+	if (!devres)
+		return -ENOMEM;
+
+	ret = gpiod_bulk_get_all(dev, &devres->bulk);
+	if (ret > 0) {
+		*bulk = devres->bulk;
+		devres->num_func = ret;
+		devres_add(dev, devres);
+	} else {
+		devres_free(devres);
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(devm_gpiod_bulk_get_all);
+
 /**
  * devm_gpiod_put - Resource-managed gpiod_put()
  * @dev:	GPIO consumer

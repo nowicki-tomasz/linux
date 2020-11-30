@@ -150,6 +150,15 @@ struct gpio_desc *gpiochip_get_desc(struct gpio_chip *chip,
 	return &gdev->descs[hwnum];
 }
 
+/*
+ * Return the GPIO number of the passed descriptor relative to its chip
+ */
+int gpio_chip_hwgpio(const struct gpio_desc *desc)
+{
+	return desc - &desc->gdev->descs[0];
+}
+EXPORT_SYMBOL_GPL(gpio_chip_hwgpio);
+
 /**
  * desc_to_gpio - convert a GPIO descriptor to the integer namespace
  * @desc: GPIO descriptor
@@ -4058,6 +4067,33 @@ bool gpiochip_line_is_persistent(struct gpio_chip *chip, unsigned int offset)
 }
 EXPORT_SYMBOL_GPL(gpiochip_line_is_persistent);
 
+bool gpiochip_line_is_active_low(struct gpio_chip *chip, unsigned int offset)
+{
+	if (offset >= chip->ngpio)
+		return false;
+
+	return test_bit(FLAG_ACTIVE_LOW, &chip->gpiodev->descs[offset].flags);
+}
+EXPORT_SYMBOL_GPL(gpiochip_line_is_active_low);
+
+bool gpiochip_line_is_pull_up(struct gpio_chip *chip, unsigned int offset)
+{
+	if (offset >= chip->ngpio)
+		return false;
+
+	return test_bit(FLAG_PULL_UP, &chip->gpiodev->descs[offset].flags);
+}
+EXPORT_SYMBOL_GPL(gpiochip_line_is_pull_up);
+
+bool gpiochip_line_is_pull_down(struct gpio_chip *chip, unsigned int offset)
+{
+	if (offset >= chip->ngpio)
+		return false;
+
+	return test_bit(FLAG_PULL_UP, &chip->gpiodev->descs[offset].flags);
+}
+EXPORT_SYMBOL_GPL(gpiochip_line_is_pull_down);
+
 /**
  * gpiod_get_raw_value_cansleep() - return a gpio's raw value
  * @desc: gpio whose value will be returned
@@ -4956,6 +4992,140 @@ void gpiod_put_array(struct gpio_descs *descs)
 	kfree(descs);
 }
 EXPORT_SYMBOL_GPL(gpiod_put_array);
+
+static int __of_gpiod_name_length(const char *name, const char *suffix)
+{
+	char *ptr, *ptr_end;
+	size_t len = 0;
+
+	ptr = strnstr(name, suffix, strlen(name));
+	if (!ptr)
+		return -ENOENT;
+
+	/* and make sure it's NULL terminated */
+	ptr_end = ptr + strlen(suffix);
+	if (*ptr_end != '\0') {
+		len = __of_gpiod_name_length(ptr_end, suffix);
+		if (len <= 0)
+			return -ENOENT;
+	}
+
+	return ptr - name + len;
+}
+
+static int of_gpiod_name_length(const char *name)
+{
+	char suffix[32];
+	unsigned int i;
+	int length;
+
+	for (i = 0; i < ARRAY_SIZE(gpio_suffixes); i++) {
+		snprintf(suffix, sizeof(suffix), "-%s", gpio_suffixes[i]);
+		length = __of_gpiod_name_length(name, suffix);
+		if (length > 0)
+			return length;
+	}
+	return -ENOENT;
+}
+
+/**
+ * of_gpiod_count() - Count the number of gpios a device node has
+ * @np: device node to count
+ *
+ * Returns: The number of gpios that are possible for this node
+ */
+static unsigned int of_gpiod_count(struct device_node *np)
+{
+	struct property *pp;
+	int count = 0;
+
+	for_each_property_of_node(np, pp) {
+		if (of_gpiod_name_length(pp->name) > 0)
+			count++;
+	}
+
+	return count;
+}
+
+static int of_gpiod_bulk_init(struct device *dev,
+			      struct gpio_bulk_data *bulk_data)
+{
+	struct device_node *np = dev_of_node(dev);
+	struct property *pp;
+	int i = 0;
+
+	for_each_property_of_node(np, pp) {
+		struct gpio_desc **desc;
+		unsigned int ndescs;
+		char *func_name;
+		int len;
+
+		len = of_gpiod_name_length(pp->name);
+		if (len <= 0)
+			continue;
+
+		func_name = devm_kmalloc(dev, len + 1, GFP_KERNEL);
+		if (!func_name)
+			return -ENOMEM;
+
+		memcpy(func_name, pp->name, len);
+		func_name[len] = '\0';
+
+		ndescs = gpiod_count(dev, func_name);
+		if (ndescs < 0)
+			return ndescs;
+
+		desc = devm_kcalloc(dev, ndescs, sizeof(*desc), GFP_KERNEL);
+		if (!desc)
+			return -ENOMEM;
+
+		bulk_data[i].func = func_name;
+		bulk_data[i].ndescs = ndescs;
+		bulk_data[i++].desc = desc;
+	}
+
+	return 0;
+}
+
+int gpiod_bulk_get_all(struct device *dev, struct gpio_bulk_data **bulk_data)
+{
+	struct device_node *np = dev_of_node(dev);
+	struct gpio_bulk_data *gpio_bulk;
+	int num_func;
+	int ret, i, j;
+
+	if (!np)
+		return 0;
+
+	num_func = of_gpiod_count(np);
+	if (!num_func)
+		return 0;
+
+	gpio_bulk = devm_kcalloc(dev, num_func, sizeof(*gpio_bulk), GFP_KERNEL);
+	if (!gpio_bulk)
+		return -ENOMEM;
+
+	ret = of_gpiod_bulk_init(dev, gpio_bulk);
+	if (ret)
+		return ret;
+
+	for (i = 0; i < num_func; i++) {
+		for (j = 0; j < gpio_bulk[i].ndescs; j++) {
+			struct gpio_desc *desc;
+
+			desc = gpiod_get_index(dev, gpio_bulk[i].func, j, 0);
+			if (IS_ERR(desc))
+				return PTR_ERR(desc);
+
+			gpio_bulk[i].desc[j] = desc;
+		}
+	}
+
+	*bulk_data = gpio_bulk;
+
+	return num_func;
+}
+EXPORT_SYMBOL_GPL(gpiod_bulk_get_all);
 
 static int __init gpiolib_dev_init(void)
 {
