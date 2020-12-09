@@ -855,6 +855,18 @@ static int geni_se_probe(struct platform_device *pdev)
 	bool __maybe_unused has_earlycon = false;
 	int ret;
 
+//	return -ENOMEM;
+
+	dev_err(dev, "%s name %s ((((((((((((((((((((((((((((((((((((((( \n", __func__, dev->of_node->name);
+
+	if (!strcmp(dev_name(dev), "8c0000.geniqup"))
+		return -ENOMEM;
+
+	if (!strcmp(dev_name(dev), "ac0000.geniqup"))
+		return -ENOMEM;
+
+	dev_err(dev, "%s ((((((((((((((((((((((((((((((((((((((( keep probing\n", __func__);
+
 	wrapper = devm_kzalloc(dev, sizeof(*wrapper), GFP_KERNEL);
 	if (!wrapper)
 		return -ENOMEM;
@@ -913,7 +925,7 @@ static int geni_se_probe(struct platform_device *pdev)
 exit:
 #endif
 	dev_set_drvdata(dev, wrapper);
-	dev_dbg(dev, "GENI SE Driver probed\n");
+	dev_err(dev, "GENI SE Driver probed !!!!!!!!!!!!!!!!!!!!!!!!\n");
 	return devm_of_platform_populate(dev);
 }
 

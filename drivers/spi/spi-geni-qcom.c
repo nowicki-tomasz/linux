@@ -598,6 +598,12 @@ static int spi_geni_probe(struct platform_device *pdev)
 	if (!strcmp(dev_name(&pdev->dev), "880000.spi"))
 		return -ENOMEM;
 
+	if (!strcmp(dev_name(&pdev->dev), "a90000.spi"))
+			return -ENOMEM;
+
+	if (!strcmp(dev_name(&pdev->dev), "a80000.spi"))
+				return -ENOMEM;
+
 	dev_err(&pdev->dev, "%s ((((((((((((((((((((((((((((((((((((((( keep probing\n",
 		__func__);
 

@@ -1356,6 +1356,24 @@ static int qcom_geni_serial_probe(struct platform_device *pdev)
 	bool console = false;
 	struct uart_driver *drv;
 
+	dev_err(&pdev->dev, "%s name %s ((((((((((((((((((((((((((((((((((((((( \n",
+		__func__, pdev->dev.of_node->name);
+
+	if (!strcmp(dev_name(&pdev->dev), "88c000.serial")) {
+		dev_err(&pdev->dev, "%s ((((((((((((((((((((((((((((((((((((((( aborting\n",
+			__func__);
+		return -ENOMEM;
+	}
+
+	if (!strcmp(dev_name(&pdev->dev), "a88000.serial")) {
+		dev_err(&pdev->dev, "%s ((((((((((((((((((((((((((((((((((((((( aborting\n",
+			__func__);
+		return -ENOMEM;
+	}
+
+	dev_err(&pdev->dev, "%s ((((((((((((((((((((((((((((((((((((((( keep probing\n",
+		__func__);
+
 	if (of_device_is_compatible(pdev->dev.of_node, "qcom,geni-debug-uart"))
 		console = true;
 

@@ -508,6 +508,8 @@ static int geni_i2c_probe(struct platform_device *pdev)
 	dev_err(&pdev->dev, "%s name %s ((((((((((((((((((((((((((((((((((((((( \n",
 		__func__, pdev->dev.of_node->name);
 
+//	return -ENOMEM;
+
 	if (!strcmp(dev_name(&pdev->dev), "888000.i2c"))
 		return -ENOMEM;
 
@@ -515,6 +517,12 @@ static int geni_i2c_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	if (!strcmp(dev_name(&pdev->dev), "894000.i2c"))
+		return -ENOMEM;
+
+	if (!strcmp(dev_name(&pdev->dev), "a84000.i2c"))
+		return -ENOMEM;
+
+	if (!strcmp(dev_name(&pdev->dev), "a8c000.i2c"))
 		return -ENOMEM;
 
 	dev_err(&pdev->dev, "%s ((((((((((((((((((((((((((((((((((((((( keep probing\n",
