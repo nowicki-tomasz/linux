@@ -113,8 +113,8 @@ int vfio_platform_regulator_register_vhost(struct vfio_platform_device *vdev,
 	struct device *dev = vdev->device;
 
 	if (index > regulator_res->num_regulators - 1) {
-		dev_err(dev, "Index out of range (index %d > max %d)\n",
-			index, regulator_res->num_regulators - 1);
+		dev_err(dev, "%s: Index out of range (index %d > max %d)\n",
+			__func__, index, regulator_res->num_regulators - 1);
 		return -EINVAL;
 	}
 
@@ -173,7 +173,7 @@ int vfio_platform_regulator_handle_req(struct vfio_platform_device *vdev,
 	index = req->dev_idx;
 
 	if (index > vdev->regulator_res.num_regulators - 1) {
-		dev_err(vdev->device, "Index out of range\n");
+		dev_err(vdev->device, "%s: Index out of range\n", __func__);
 		return vfio_platform_regulator_resp(req, -EINVAL,
 						    VIRTIO_VFIO_S_INVAL);
 	}

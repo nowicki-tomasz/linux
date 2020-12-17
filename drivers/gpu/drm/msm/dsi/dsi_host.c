@@ -386,6 +386,8 @@ static int dsi_clk_init(struct msm_dsi_host *msm_host)
 	const struct msm_dsi_config *cfg = cfg_hnd->cfg;
 	int i, ret = 0;
 
+	pr_err("%s: 0\n", __func__);
+
 	/* get bus clocks */
 	for (i = 0; i < cfg->num_bus_clks; i++) {
 		msm_host->bus_clks[i] = msm_clk_get(pdev,
@@ -398,6 +400,8 @@ static int dsi_clk_init(struct msm_dsi_host *msm_host)
 		}
 	}
 
+	pr_err("%s: 1\n", __func__);
+
 	/* get link and source clocks */
 	msm_host->byte_clk = msm_clk_get(pdev, "byte");
 	if (IS_ERR(msm_host->byte_clk)) {
@@ -408,6 +412,8 @@ static int dsi_clk_init(struct msm_dsi_host *msm_host)
 		goto exit;
 	}
 
+	pr_err("%s: 2\n", __func__);
+
 	msm_host->pixel_clk = msm_clk_get(pdev, "pixel");
 	if (IS_ERR(msm_host->pixel_clk)) {
 		ret = PTR_ERR(msm_host->pixel_clk);
@@ -416,6 +422,8 @@ static int dsi_clk_init(struct msm_dsi_host *msm_host)
 		msm_host->pixel_clk = NULL;
 		goto exit;
 	}
+
+	pr_err("%s: 3\n", __func__);
 
 	msm_host->esc_clk = msm_clk_get(pdev, "core");
 	if (IS_ERR(msm_host->esc_clk)) {
@@ -426,12 +434,16 @@ static int dsi_clk_init(struct msm_dsi_host *msm_host)
 		goto exit;
 	}
 
+	pr_err("%s: 4\n", __func__);
+
 	msm_host->byte_clk_src = clk_get_parent(msm_host->byte_clk);
 	if (IS_ERR(msm_host->byte_clk_src)) {
 		ret = PTR_ERR(msm_host->byte_clk_src);
 		pr_err("%s: can't find byte_clk clock. ret=%d\n", __func__, ret);
 		goto exit;
 	}
+
+	pr_err("%s: 5\n", __func__);
 
 	msm_host->pixel_clk_src = clk_get_parent(msm_host->pixel_clk);
 	if (IS_ERR(msm_host->pixel_clk_src)) {
@@ -440,8 +452,12 @@ static int dsi_clk_init(struct msm_dsi_host *msm_host)
 		goto exit;
 	}
 
+	pr_err("%s: 6\n", __func__);
+
 	if (cfg_hnd->ops->clk_init_ver)
 		ret = cfg_hnd->ops->clk_init_ver(msm_host);
+
+	pr_err("%s: 7\n", __func__);
 exit:
 	return ret;
 }
@@ -1815,7 +1831,8 @@ static int dsi_host_get_id(struct msm_dsi_host *msm_host)
 			return i;
 	}
 
-	return -EINVAL;
+	return 0;
+//	return -EINVAL;
 }
 
 int msm_dsi_host_init(struct msm_dsi *msm_dsi)
@@ -1823,6 +1840,8 @@ int msm_dsi_host_init(struct msm_dsi *msm_dsi)
 	struct msm_dsi_host *msm_host = NULL;
 	struct platform_device *pdev = msm_dsi->pdev;
 	int ret;
+
+	pr_err("%s: 0\n", __func__);
 
 	msm_host = devm_kzalloc(&pdev->dev, sizeof(*msm_host), GFP_KERNEL);
 	if (!msm_host) {
@@ -1835,11 +1854,15 @@ int msm_dsi_host_init(struct msm_dsi *msm_dsi)
 	msm_host->pdev = pdev;
 	msm_dsi->host = &msm_host->base;
 
+	pr_err("%s: 1\n", __func__);
+
 	ret = dsi_host_parse_dt(msm_host);
 	if (ret) {
 		pr_err("%s: failed to parse dt\n", __func__);
 		goto fail;
 	}
+
+	pr_err("%s: 2\n", __func__);
 
 	msm_host->ctrl_base = msm_ioremap(pdev, "dsi_ctrl", "DSI CTRL");
 	if (IS_ERR(msm_host->ctrl_base)) {
@@ -1850,6 +1873,8 @@ int msm_dsi_host_init(struct msm_dsi *msm_dsi)
 
 	pm_runtime_enable(&pdev->dev);
 
+	pr_err("%s: 3\n", __func__);
+
 	msm_host->cfg_hnd = dsi_get_config(msm_host);
 	if (!msm_host->cfg_hnd) {
 		ret = -EINVAL;
@@ -1857,12 +1882,16 @@ int msm_dsi_host_init(struct msm_dsi *msm_dsi)
 		goto fail;
 	}
 
+	pr_err("%s: 4\n", __func__);
+
 	msm_host->id = dsi_host_get_id(msm_host);
 	if (msm_host->id < 0) {
 		ret = msm_host->id;
 		pr_err("%s: unable to identify DSI host index\n", __func__);
 		goto fail;
 	}
+
+	pr_err("%s: 5\n", __func__);
 
 	/* fixup base address by io offset */
 	msm_host->ctrl_base += msm_host->cfg_hnd->cfg->io_offset;
@@ -1873,11 +1902,15 @@ int msm_dsi_host_init(struct msm_dsi *msm_dsi)
 		goto fail;
 	}
 
+	pr_err("%s: 6\n", __func__);
+
 	ret = dsi_clk_init(msm_host);
 	if (ret) {
 		pr_err("%s: unable to initialize dsi clks\n", __func__);
 		goto fail;
 	}
+
+	pr_err("%s: 7\n", __func__);
 
 	msm_host->rx_buf = devm_kzalloc(&pdev->dev, SZ_4K, GFP_KERNEL);
 	if (!msm_host->rx_buf) {
@@ -1885,6 +1918,8 @@ int msm_dsi_host_init(struct msm_dsi *msm_dsi)
 		pr_err("%s: alloc rx temp buf failed\n", __func__);
 		goto fail;
 	}
+
+	pr_err("%s: 8\n", __func__);
 
 	msm_host->opp_table = dev_pm_opp_set_clkname(&pdev->dev, "byte");
 	if (IS_ERR(msm_host->opp_table))
@@ -1899,6 +1934,8 @@ int msm_dsi_host_init(struct msm_dsi *msm_dsi)
 		return ret;
 	}
 
+	pr_err("%s: 9\n", __func__);
+
 	init_completion(&msm_host->dma_comp);
 	init_completion(&msm_host->video_comp);
 	mutex_init(&msm_host->dev_mutex);
@@ -1912,7 +1949,7 @@ int msm_dsi_host_init(struct msm_dsi *msm_dsi)
 
 	msm_dsi->id = msm_host->id;
 
-	DBG("Dsi Host %d initialized", msm_host->id);
+	pr_err("Dsi Host %d initialized", msm_host->id);
 	return 0;
 
 fail:
@@ -2242,6 +2279,9 @@ int msm_dsi_host_set_src_pll(struct mipi_dsi_host *host,
 			__func__);
 		return 0;
 	}
+
+	pr_err("%s: set parent msm_host->byte_clk_src %px, byte_clk_provider %px \n",
+		__func__, msm_host->byte_clk_src, byte_clk_provider);
 
 	ret = clk_set_parent(msm_host->byte_clk_src, byte_clk_provider);
 	if (ret) {

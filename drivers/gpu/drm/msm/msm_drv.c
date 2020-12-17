@@ -68,7 +68,8 @@ MODULE_PARM_DESC(fbdev, "Enable fbdev compat layer");
 module_param(fbdev, bool, 0600);
 #endif
 
-static char *vram = "16m";
+//static char *vram = "16m";
+static char *vram = "4m";
 MODULE_PARM_DESC(vram, "Configure VRAM size (for devices without IOMMU/GPUMMU)");
 module_param(vram, charp, 0);
 
@@ -403,11 +404,15 @@ static int msm_drm_init(struct device *dev, struct drm_driver *drv)
 	int ret, i;
 	struct sched_param param;
 
+	pr_err(" %s 0\n", __func__);
+
 	ddev = drm_dev_alloc(drv, dev);
 	if (IS_ERR(ddev)) {
 		DRM_DEV_ERROR(dev, "failed to allocate drm_device\n");
 		return PTR_ERR(ddev);
 	}
+
+	pr_err(" %s 1\n", __func__);
 
 	platform_set_drvdata(pdev, ddev);
 
@@ -416,6 +421,8 @@ static int msm_drm_init(struct device *dev, struct drm_driver *drv)
 		ret = -ENOMEM;
 		goto err_put_drm_dev;
 	}
+
+	pr_err(" %s 2\n", __func__);
 
 	ddev->dev_private = priv;
 	priv->dev = ddev;
@@ -434,6 +441,8 @@ static int msm_drm_init(struct device *dev, struct drm_driver *drv)
 	if (ret)
 		goto err_free_priv;
 
+	pr_err(" %s 3\n", __func__);
+
 	mdss = priv->mdss;
 
 	priv->wq = alloc_ordered_workqueue("msm", 0);
@@ -445,10 +454,14 @@ static int msm_drm_init(struct device *dev, struct drm_driver *drv)
 
 	drm_mode_config_init(ddev);
 
+	pr_err(" %s 4\n", __func__);
+
 	/* Bind all our sub-components: */
 	ret = component_bind_all(dev, ddev);
 	if (ret)
 		goto err_destroy_mdss;
+
+	pr_err(" %s 5\n", __func__);
 
 	ret = msm_init_vram(ddev);
 	if (ret)
@@ -465,6 +478,8 @@ static int msm_drm_init(struct device *dev, struct drm_driver *drv)
 	dma_set_max_seg_size(dev, DMA_BIT_MASK(32));
 
 	msm_gem_shrinker_init(ddev);
+
+	pr_err(" %s 6\n", __func__);
 
 	switch (get_mdp_ver(pdev)) {
 	case KMS_MDP4:
@@ -485,12 +500,16 @@ static int msm_drm_init(struct device *dev, struct drm_driver *drv)
 		break;
 	}
 
+	pr_err(" %s 7\n", __func__);
+
 	if (IS_ERR(kms)) {
 		DRM_DEV_ERROR(dev, "failed to load kms\n");
 		ret = PTR_ERR(kms);
 		priv->kms = NULL;
 		goto err_msm_uninit;
 	}
+
+	pr_err(" %s 8\n", __func__);
 
 	/* Enable normalization of plane zpos */
 	ddev->mode_config.normalize_zpos = true;
@@ -1139,6 +1158,8 @@ static int add_components_mdp(struct device *mdp_dev,
 	struct device_node *ep_node;
 	struct device *master_dev;
 
+	pr_err(" %s 0\n", __func__);
+
 	/*
 	 * on MDP4 based platforms, the MDP platform device is the component
 	 * master that adds other display interface components to itself.
@@ -1152,10 +1173,14 @@ static int add_components_mdp(struct device *mdp_dev,
 	else
 		master_dev = mdp_dev->parent;
 
+	pr_err(" %s 1\n", __func__);
+
 	for_each_endpoint_of_node(np, ep_node) {
 		struct device_node *intf;
 		struct of_endpoint ep;
 		int ret;
+
+		pr_err(" %s 1 0\n", __func__);
 
 		ret = of_graph_parse_endpoint(ep_node, &ep);
 		if (ret) {
@@ -1164,6 +1189,8 @@ static int add_components_mdp(struct device *mdp_dev,
 			return ret;
 		}
 
+		pr_err(" %s 1 1\n", __func__);
+
 		/*
 		 * The LCDC/LVDS port on MDP4 is a speacial case where the
 		 * remote-endpoint isn't a component that we need to add
@@ -1171,6 +1198,8 @@ static int add_components_mdp(struct device *mdp_dev,
 		if (of_device_is_compatible(np, "qcom,mdp4") &&
 		    ep.port == 0)
 			continue;
+
+		pr_err(" %s 1 2\n", __func__);
 
 		/*
 		 * It's okay if some of the ports don't have a remote endpoint
@@ -1181,12 +1210,16 @@ static int add_components_mdp(struct device *mdp_dev,
 		if (!intf)
 			continue;
 
+		pr_err(" %s 1 3\n", __func__);
+
 		if (of_device_is_available(intf))
 			drm_of_component_match_add(master_dev, matchptr,
 						   compare_of, intf);
 
 		of_node_put(intf);
 	}
+
+	pr_err(" %s 2\n", __func__);
 
 	return 0;
 }
@@ -1201,6 +1234,8 @@ static int add_display_components(struct device *dev,
 {
 	struct device *mdp_dev;
 	int ret;
+
+	pr_err(" %s 0\n", __func__);
 
 	/*
 	 * MDP5/DPU based devices don't have a flat hierarchy. There is a top
@@ -1217,6 +1252,8 @@ static int add_display_components(struct device *dev,
 			return ret;
 		}
 
+		pr_err(" %s 0 1\n", __func__);
+
 		mdp_dev = device_find_child(dev, NULL, compare_name_mdp);
 		if (!mdp_dev) {
 			DRM_DEV_ERROR(dev, "failed to find MDSS MDP node\n");
@@ -1226,6 +1263,8 @@ static int add_display_components(struct device *dev,
 
 		put_device(mdp_dev);
 
+		pr_err(" %s 0 2\n", __func__);
+
 		/* add the MDP component itself */
 		drm_of_component_match_add(dev, matchptr, compare_of,
 					   mdp_dev->of_node);
@@ -1234,9 +1273,13 @@ static int add_display_components(struct device *dev,
 		mdp_dev = dev;
 	}
 
+	pr_err(" %s 1\n", __func__);
+
 	ret = add_components_mdp(mdp_dev, matchptr);
 	if (ret)
 		of_platform_depopulate(dev);
+
+	pr_err(" %s 2 ret %d\n", __func__, ret);
 
 	return ret;
 }
@@ -1295,15 +1338,30 @@ static int msm_pdev_probe(struct platform_device *pdev)
 	struct component_match *match = NULL;
 	int ret;
 
+	if (!strcmp(dev_name(&pdev->dev), "ae00000.mdss")) {
+		pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s ERROR PROBE\n", __func__);
+		return -EINVAL;
+	}
+	if (of_property_read_bool(pdev->dev.of_node, "dont-probe")) {
+		dev_err(&pdev->dev, "~~~~~~~~~~~~~~~ skip driver probing\n");
+		return -EINVAL;
+	}
+
+	pr_err(" %s 0\n", __func__);
+
 	if (get_mdp_ver(pdev)) {
 		ret = add_display_components(&pdev->dev, &match);
 		if (ret)
 			return ret;
 	}
 
+	pr_err(" %s 1\n", __func__);
+
 	ret = add_gpu_components(&pdev->dev, &match);
 	if (ret)
 		goto fail;
+
+	pr_err(" %s 2\n", __func__);
 
 	/* on all devices that I am aware of, iommu's which can map
 	 * any address the cpu can see are used:
@@ -1312,14 +1370,21 @@ static int msm_pdev_probe(struct platform_device *pdev)
 	if (ret)
 		goto fail;
 
+	pr_err(" %s 3\n", __func__);
+
 	ret = component_master_add_with_match(&pdev->dev, &msm_drm_ops, match);
 	if (ret)
 		goto fail;
+
+	pr_err(" %s 4\n", __func__);
 
 	return 0;
 
 fail:
 	of_platform_depopulate(&pdev->dev);
+
+	pr_err(" %s 5 fail ret %d\n", __func__, ret);
+
 	return ret;
 }
 

@@ -105,6 +105,22 @@ struct clk {
 	struct hlist_node clks_node;
 };
 
+const char *clk_get_dev_id(struct clk *clk)
+{
+	if (!clk)
+		return NULL;
+
+	return clk->dev_id;
+}
+
+const char *clk_get_con_id(struct clk *clk)
+{
+	if (!clk)
+		return NULL;
+
+	return clk->con_id;
+}
+
 /***           runtime pm          ***/
 static int clk_pm_runtime_get(struct clk_core *core)
 {
@@ -1672,36 +1688,58 @@ static int clk_fetch_parent_index(struct clk_core *core,
 {
 	int i;
 
+	pr_err("%s: 0\n", __func__);
+
 	if (!parent)
 		return -EINVAL;
 
+	pr_err("%s: 1 num parents %d\n", __func__, (int)core->num_parents);
+
 	for (i = 0; i < core->num_parents; i++) {
+
+		pr_err("%s: 1 0 index %d\n", __func__, i);
+
 		/* Found it first try! */
 		if (core->parents[i].core == parent)
 			return i;
 
+		pr_err("%s: 1 1\n", __func__);
+
 		/* Something else is here, so keep looking */
 		if (core->parents[i].core)
 			continue;
+
+		pr_err("%s: 1 2\n", __func__);
 
 		/* Maybe core hasn't been cached but the hw is all we know? */
 		if (core->parents[i].hw) {
 			if (core->parents[i].hw == parent->hw)
 				break;
 
+			pr_err("%s: 1 3\n", __func__);
+
 			/* Didn't match, but we're expecting a clk_hw */
 			continue;
 		}
+
+		pr_err("%s: 1 4\n", __func__);
 
 		/* Maybe it hasn't been cached (clk_set_parent() path) */
 		if (parent == clk_core_get(core, i))
 			break;
 
+		pr_err("%s: 1 5 parent->name %s, core->parents[i].name %s core->name %s\n",
+			__func__, parent->name, core->parents[i].name, core->name);
+
 		/* Fallback to comparing globally unique names */
 		if (core->parents[i].name &&
 		    !strcmp(parent->name, core->parents[i].name))
 			break;
+
+		pr_err("%s: 1 6\n", __func__);
 	}
+
+	pr_err("%s: 2 idx %d num_parentes %d\n", __func__, i, (int)core->num_parents);
 
 	if (i == core->num_parents)
 		return -EINVAL;
@@ -2532,7 +2570,7 @@ static int clk_core_set_parent_nolock(struct clk_core *core,
 	if (parent) {
 		p_index = clk_fetch_parent_index(core, parent);
 		if (p_index < 0) {
-			pr_debug("%s: clk %s can not be parent of clk %s\n",
+			pr_err("%s: clk %s can not be parent of clk %s\n",
 					__func__, parent->name, core->name);
 			return p_index;
 		}
@@ -3643,6 +3681,9 @@ static int clk_core_populate_parent_map(struct clk_core *core,
 	int i, ret = 0;
 	struct clk_parent_map *parents, *parent;
 
+	pr_err("%s init->name %s, init->num_parents %d\n",
+		__func__, init->name, (int)init->num_parents);
+
 	if (!num_parents)
 		return 0;
 
@@ -3674,6 +3715,10 @@ static int clk_core_populate_parent_map(struct clk_core *core,
 				ret = clk_cpy_name(&parent->name,
 						   parent_data[i].name,
 						   false);
+
+			pr_err("%s parent_data assigned %s name and parent_data[%d].fw_name %s\n",
+				__func__, parent->fw_name, i, parent_data[i].fw_name);
+
 		} else if (parent_hws) {
 			parent->hw = parent_hws[i];
 		} else {
@@ -3754,6 +3799,9 @@ __clk_register(struct device *dev, struct device_node *np, struct clk_hw *hw)
 	core->min_rate = 0;
 	core->max_rate = ULONG_MAX;
 	hw->core = core;
+
+	pr_err("%s np %pOFfcF\n init->name %s, init->num_parents %d\n",
+		__func__, np, init->name, (int)init->num_parents);
 
 	ret = clk_core_populate_parent_map(core, init);
 	if (ret)

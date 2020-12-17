@@ -615,7 +615,7 @@ static int dsi_pll_10nm_get_provider(struct msm_dsi_pll *pll,
 	struct dsi_pll_10nm *pll_10nm = to_pll_10nm(pll);
 	struct clk_hw_onecell_data *hw_data = pll_10nm->hw_data;
 
-	DBG("DSI PLL%d", pll_10nm->id);
+	pr_err("DSI PLL%d", pll_10nm->id);
 
 	if (byte_clk_provider)
 		*byte_clk_provider = hw_data->hws[DSI_BYTE_PLL_CLK]->clk;

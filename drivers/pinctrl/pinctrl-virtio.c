@@ -130,6 +130,9 @@ static int virtio_gpio_direction_input(struct gpio_chip *chip, unsigned offset)
 			.hdr.resp_len = sizeof(struct virtio_vfio_resp_status),
 	};
 
+	dev_err(vpctrl->dev, "~~~~~~~~ %s pinctrl name %s offset %u\n",
+		__func__, dev_name(vpctrl->dev), offset);
+
 	return WARN_ON(virtio_transport_send_req_sync(vpctrl->virtio_trans, &msg,
 						      sizeof(msg)));
 }
@@ -146,6 +149,9 @@ static int virtio_gpio_direction_output(struct gpio_chip *chip, unsigned offset,
 			.val = value,
 			.hdr.resp_len = sizeof(struct virtio_vfio_resp_status),
 	};
+
+	dev_err(vpctrl->dev, "~~~~~~~~ %s pinctrl name %s offset %u value %d\n",
+		__func__, dev_name(vpctrl->dev), offset, value);
 
 	return WARN_ON(virtio_transport_send_req_sync(vpctrl->virtio_trans, &msg,
 						      sizeof(msg)));
@@ -165,6 +171,10 @@ static int virtio_gpio_get_direction(struct gpio_chip *chip, unsigned int offset
 
 	WARN_ON(virtio_transport_send_req_sync(vpctrl->virtio_trans, &msg,
 					       sizeof(msg)));
+
+	dev_err(vpctrl->dev, "~~~~~~~~ %s pinctrl name %s dir %ld\n",
+		__func__, dev_name(vpctrl->dev), (long)msg.dir);
+
 	return msg.dir;
 }
 
@@ -182,6 +192,10 @@ static int virtio_gpio_get(struct gpio_chip *chip, unsigned offset)
 
 	WARN_ON(virtio_transport_send_req_sync(vpctrl->virtio_trans, &msg,
 					       sizeof(msg)));
+
+	dev_err(vpctrl->dev, "~~~~~~~~ %s pinctrl name %s val %ld\n",
+			__func__, dev_name(vpctrl->dev), (long)msg.val);
+
 	return msg.val;
 }
 
@@ -196,6 +210,9 @@ static void virtio_gpio_set(struct gpio_chip *chip, unsigned offset, int value)
 			.val = value,
 			.hdr.resp_len = sizeof(struct virtio_vfio_resp_status),
 	};
+
+	dev_err(vpctrl->dev, "~~~~~~~~ %s pinctrl name %s val %ld\n",
+			__func__, dev_name(vpctrl->dev), (long)value);
 
 	WARN_ON(virtio_transport_send_req_sync(vpctrl->virtio_trans, &msg,
 					       sizeof(msg)));
@@ -214,12 +231,22 @@ static int virtio_gpio_probe(struct vfio_pinctrl_dev *vpinctrl)
 				sizeof(struct virtio_vfio_resp_status),
 	};
 
+	if (!of_property_read_bool(dev->of_node, "gpio-controller")) {
+		dev_err(dev, "~~~~~~~~~~~~~~~ skip GPIO driver probing\n");
+		return 0;
+	}
+
+
+	dev_err(dev, "~~~~~~~~~~~~~~~ GPIO driver probing\n");
+
 	ret = virtio_transport_send_req_sync(vpinctrl->virtio_trans, &msg,
 					     sizeof(msg));
 	if (ret) {
 		dev_err(dev, "Failed to get GPIO number of desc (err = %d)\n", ret);
 		return ret;
 	}
+
+	dev_err(dev, "~~~~~~~~~~~~~~~ nr_desc %ld\n", msg.nr_desc);
 
 	chip->base = -1;
 	chip->ngpio = msg.nr_desc;
@@ -233,6 +260,8 @@ static int virtio_gpio_probe(struct vfio_pinctrl_dev *vpinctrl)
 	chip->get_direction    = virtio_gpio_get_direction;
 	chip->get              = virtio_gpio_get;
 	chip->set              = virtio_gpio_set;
+//	chip->request          = gpiochip_generic_request;
+//	chip->free             = gpiochip_generic_free;
 
 	ret = gpiochip_add_data(&vpinctrl->chip, vpinctrl);
 	if (ret) {
@@ -343,6 +372,8 @@ static int virtio_pinctrl_probe(struct virtio_device *vdev)
 		dev_err(dev, "Couldn't register GPIO chip\n");
 		goto err;
 	}
+
+	dev_err(dev, "~~~~~~~~~~~~~~~ Driver probing end\n");
 
 	vdev->priv = vpinctrl;
 	return 0;

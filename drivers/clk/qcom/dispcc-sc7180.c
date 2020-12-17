@@ -99,9 +99,14 @@ static const struct parent_map disp_cc_parent_map_2[] = {
 	{ P_DSI0_PHY_PLL_OUT_BYTECLK, 1 },
 };
 
+//static const struct clk_parent_data disp_cc_parent_data_2[] = {
+//	{ .fw_name = "bi_tcxo" },
+//	{ .fw_name = "dsi0_phy_pll_out_byteclk" },
+//};
+
 static const struct clk_parent_data disp_cc_parent_data_2[] = {
-	{ .fw_name = "bi_tcxo" },
-	{ .fw_name = "dsi0_phy_pll_out_byteclk" },
+	{ .fw_name = "bi_tcxo", .name = "bi_tcxo"},
+	{ .fw_name = "dsi0_phy_pll_out_byteclk", .name = "dsi0_phy_pll_out_byteclk"},
 };
 
 static const struct parent_map disp_cc_parent_map_3[] = {
@@ -133,9 +138,14 @@ static const struct parent_map disp_cc_parent_map_5[] = {
 	{ P_DSI0_PHY_PLL_OUT_DSICLK, 1 },
 };
 
+//static const struct clk_parent_data disp_cc_parent_data_5[] = {
+//	{ .fw_name = "bi_tcxo" },
+//	{ .fw_name = "dsi0_phy_pll_out_dsiclk" },
+//};
+
 static const struct clk_parent_data disp_cc_parent_data_5[] = {
-	{ .fw_name = "bi_tcxo" },
-	{ .fw_name = "dsi0_phy_pll_out_dsiclk" },
+	{ .fw_name = "bi_tcxo", .name = "bi_tcxo" },
+	{ .fw_name = "dsi0_phy_pll_out_dsiclk", .name = "dsi0_phy_pll_out_dsiclk" },
 };
 
 static const struct freq_tbl ftbl_disp_cc_mdss_ahb_clk_src[] = {
@@ -699,6 +709,14 @@ static int disp_cc_sc7180_probe(struct platform_device *pdev)
 {
 	struct regmap *regmap;
 	struct alpha_pll_config disp_cc_pll_config = {};
+	int ret;
+
+	if (!strcmp(dev_name(&pdev->dev), "af00000.clock-controller")) {
+		pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s ERROR PROBE\n", __func__);
+        	return -EINVAL;
+	} else {
+		pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s PROBE\n", __func__);
+	}
 
 	regmap = qcom_cc_map(pdev, &disp_cc_sc7180_desc);
 	if (IS_ERR(regmap))
@@ -712,7 +730,9 @@ static int disp_cc_sc7180_probe(struct platform_device *pdev)
 
 	clk_fabia_pll_configure(&disp_cc_pll0, regmap, &disp_cc_pll_config);
 
-	return qcom_cc_really_probe(pdev, &disp_cc_sc7180_desc, regmap);
+	ret = qcom_cc_really_probe(pdev, &disp_cc_sc7180_desc, regmap);
+	pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s PROBE done ret %d\n", __func__, ret);
+	return ret;
 }
 
 static struct platform_driver disp_cc_sc7180_driver = {

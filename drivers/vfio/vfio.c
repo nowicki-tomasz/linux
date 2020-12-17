@@ -336,6 +336,9 @@ static struct vfio_group *vfio_create_group(struct iommu_group *iommu_group)
 
 	kref_init(&group->kref);
 	INIT_LIST_HEAD(&group->device_list);
+
+	pr_err("&&&&&&&&&&&&&&&&& %s: 1 group %px\n", __func__, group);
+
 	mutex_init(&group->device_lock);
 	INIT_LIST_HEAD(&group->unbound_list);
 	mutex_init(&group->unbound_lock);
@@ -406,6 +409,8 @@ static void vfio_group_release(struct kref *kref)
 	struct vfio_group *group = container_of(kref, struct vfio_group, kref);
 	struct vfio_unbound_dev *unbound, *tmp;
 	struct iommu_group *iommu_group = group->iommu_group;
+
+	pr_err("&&&&&&&&&&&&&&&&& %s: 1 group %px\n", __func__, group);
 
 	WARN_ON(!list_empty(&group->device_list));
 	WARN_ON(group->notifier.head);
@@ -561,6 +566,9 @@ struct vfio_device *vfio_group_create_device(struct vfio_group *group,
 	list_add(&device->group_next, &group->device_list);
 	mutex_unlock(&group->device_lock);
 
+	dev_err(dev, "&&&&&&&&&&&&&&&&&&& %s: group %px device %px device->dev %px\n",
+		__func__, group, device, device->dev);
+
 	return device;
 }
 
@@ -601,15 +609,27 @@ static struct vfio_device *vfio_group_get_device(struct vfio_group *group,
 {
 	struct vfio_device *device;
 
+	dev_err(dev, "%s: 0\n", __func__);
+
 	mutex_lock(&group->device_lock);
 	list_for_each_entry(device, &group->device_list, group_next) {
+
+		dev_err(dev, "%s: 1 group %px device %px device->dev %px dev %px\n",
+			__func__, group, device, device->dev, dev);
+
 		if (device->dev == dev) {
+
+			dev_err(dev, "%s: 2 match\n", __func__);
+
 			vfio_device_get(device);
 			mutex_unlock(&group->device_lock);
 			return device;
 		}
 	}
 	mutex_unlock(&group->device_lock);
+
+	dev_err(dev, "%s: 3 no match\n", __func__);
+
 	return NULL;
 }
 
@@ -666,23 +686,38 @@ static int vfio_dev_viable(struct device *dev, void *data)
 	struct vfio_unbound_dev *unbound;
 	int ret = -EINVAL;
 
+	dev_err(dev, "%s: 0 ret %d %px\n", __func__, ret, dev);
+
 	mutex_lock(&group->unbound_lock);
 	list_for_each_entry(unbound, &group->unbound_list, unbound_next) {
+
+		dev_err(dev, "%s: 0 1 unbound dev %s ret %d\n",
+				__func__, dev_name(unbound->dev), ret);
+
 		if (dev == unbound->dev) {
 			ret = 0;
+
+			dev_err(dev, "%s: 0 2 ret %d\n", __func__, ret);
+
 			break;
 		}
 	}
 	mutex_unlock(&group->unbound_lock);
 
+	dev_err(dev, "%s: 1 ret %d\n", __func__, ret);
+
 	if (!ret || !drv || vfio_dev_whitelisted(dev, drv))
 		return 0;
+
+	dev_err(dev, "%s: 2 ret %d\n", __func__, ret);
 
 	device = vfio_group_get_device(group, dev);
 	if (device) {
 		vfio_device_put(device);
 		return 0;
 	}
+
+	dev_err(dev, "%s: 3 ret %d\n", __func__, ret);
 
 	return ret;
 }
@@ -1435,17 +1470,26 @@ static bool vfio_group_viable(struct vfio_group *group)
 
 static int vfio_group_add_container_user(struct vfio_group *group)
 {
+	pr_err("%s 1\n", __func__);
+
 	if (!atomic_inc_not_zero(&group->container_users))
 		return -EINVAL;
+
+	pr_err("%s 2\n", __func__);
 
 	if (group->noiommu) {
 		atomic_dec(&group->container_users);
 		return -EPERM;
 	}
+
+	pr_err("%s 3\n", __func__);
+
 	if (!group->container->iommu_driver || !vfio_group_viable(group)) {
 		atomic_dec(&group->container_users);
 		return -EINVAL;
 	}
+
+	pr_err("%s 4\n", __func__);
 
 	return 0;
 }
@@ -1458,16 +1502,24 @@ static int vfio_group_get_device_fd(struct vfio_group *group, char *buf)
 	struct file *filep;
 	int ret;
 
+	pr_err("%s 0\n", __func__);
+
 	if (0 == atomic_read(&group->container_users) ||
 	    !group->container->iommu_driver || !vfio_group_viable(group))
 		return -EINVAL;
 
+	pr_err("%s 1\n", __func__);
+
 	if (group->noiommu && !capable(CAP_SYS_RAWIO))
 		return -EPERM;
+
+	pr_err("%s 2\n", __func__);
 
 	device = vfio_device_get_from_name(group, buf);
 	if (!device)
 		return -ENODEV;
+
+	pr_err("%s 3\n", __func__);
 
 	ret = device->ops->open(device->device_data);
 	if (ret) {
@@ -1568,9 +1620,14 @@ static long vfio_group_fops_unl_ioctl(struct file *filep,
 	{
 		char *buf;
 
+
+		pr_err("%s 0\n", __func__);
+
 		buf = strndup_user((const char __user *)arg, PAGE_SIZE);
 		if (IS_ERR(buf))
 			return PTR_ERR(buf);
+
+		pr_err("%s 1\n", __func__);
 
 		ret = vfio_group_get_device_fd(group, buf);
 		kfree(buf);

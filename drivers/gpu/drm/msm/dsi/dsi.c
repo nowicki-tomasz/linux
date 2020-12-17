@@ -67,37 +67,50 @@ static struct msm_dsi *dsi_init(struct platform_device *pdev)
 	struct msm_dsi *msm_dsi;
 	int ret;
 
+	pr_err("%s: 0\n", __func__);
+
 	if (!pdev)
 		return ERR_PTR(-ENXIO);
 
 	msm_dsi = devm_kzalloc(&pdev->dev, sizeof(*msm_dsi), GFP_KERNEL);
 	if (!msm_dsi)
 		return ERR_PTR(-ENOMEM);
-	DBG("dsi probed=%p", msm_dsi);
+	pr_err("dsi probed=%p", msm_dsi);
 
 	msm_dsi->id = -1;
 	msm_dsi->pdev = pdev;
 	platform_set_drvdata(pdev, msm_dsi);
+
+	pr_err("%s: 1\n", __func__);
 
 	/* Init dsi host */
 	ret = msm_dsi_host_init(msm_dsi);
 	if (ret)
 		goto destroy_dsi;
 
+	pr_err("%s: 2\n", __func__);
+
 	/* GET dsi PHY */
 	ret = dsi_get_phy(msm_dsi);
 	if (ret)
 		goto destroy_dsi;
+
+	pr_err("%s: 3\n", __func__);
 
 	/* Register to dsi manager */
 	ret = msm_dsi_manager_register(msm_dsi);
 	if (ret)
 		goto destroy_dsi;
 
+	pr_err("%s: 4\n", __func__);
+
 	return msm_dsi;
 
 destroy_dsi:
 	dsi_destroy(msm_dsi);
+
+	pr_err("%s: 5 ret %d\n", __func__, ret);
+
 	return ERR_PTR(ret);
 }
 
@@ -144,6 +157,15 @@ static const struct component_ops dsi_ops = {
 
 static int dsi_dev_probe(struct platform_device *pdev)
 {
+	if (!strcmp(dev_name(&pdev->dev), "ae94000.dsi")) {
+		pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s ERROR PROBE\n", __func__);
+		return -EINVAL;
+	}
+	if (of_property_read_bool(pdev->dev.of_node, "dont-probe")) {
+		dev_err(&pdev->dev, "~~~~~~~~~~~~~~~ skip driver probing\n");
+		return -EINVAL;
+	}
+
 	return component_add(&pdev->dev, &dsi_ops);
 }
 

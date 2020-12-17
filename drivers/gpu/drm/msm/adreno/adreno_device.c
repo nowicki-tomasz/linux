@@ -459,6 +459,15 @@ static int adreno_probe(struct platform_device *pdev)
 
 	int ret;
 
+	if (!strcmp(dev_name(&pdev->dev), "5000000.gpu")) {
+		pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s ERROR PROBE\n", __func__);
+		return -EINVAL;
+	}
+//	if (of_property_read_bool(pdev->dev.of_node, "dont-probe")) {
+//		dev_err(&pdev->dev, "~~~~~~~~~~~~~~~ skip driver probing\n");
+//		return -EINVAL;
+//	}
+
 	ret = component_add(&pdev->dev, &a3xx_ops);
 	if (ret)
 		return ret;

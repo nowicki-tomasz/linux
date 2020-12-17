@@ -674,14 +674,27 @@ static int platform_drv_probe(struct device *_dev)
 	struct platform_device *dev = to_platform_device(_dev);
 	int ret;
 
+	if (!strcmp(dev_name(_dev), "ae00000.mdss")) {
+		dev_err(_dev, "HHHHHHHHHHHHHHHHHHHHHHHHH %s skipped clk and PM set\n", __func__);
+		goto skip_clk_set_and_pm;
+	}
+
+	if (!strcmp(dev_name(_dev), "ae01000.mdp") ||
+	    !strcmp(dev_name(_dev), "ae90000.displayport-controller")) {
+		dev_err(_dev, "HHHHHHHHHHHHHHHHHHHHHHHHH %s skipped clk set\n", __func__);
+		goto skip_clk_set;
+	}
+
 	ret = of_clk_set_defaults(_dev->of_node, false);
 	if (ret < 0)
 		return ret;
 
+skip_clk_set:
 	ret = dev_pm_domain_attach(_dev, true);
 	if (ret)
 		goto out;
 
+skip_clk_set_and_pm:
 	if (drv->probe) {
 		ret = drv->probe(dev);
 		if (ret)

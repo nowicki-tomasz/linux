@@ -254,19 +254,26 @@ static struct gpio_desc *of_get_named_gpiod_flags(struct device_node *np,
 	struct gpio_desc *desc;
 	int ret;
 
+	pr_err("%s 0 %s\n", __func__);
+
 	ret = of_parse_phandle_with_args_map(np, propname, "gpio", index,
 					     &gpiospec);
 	if (ret) {
-		pr_debug("%s: can't parse '%s' property of node '%pOF[%d]'\n",
+		pr_err("%s: can't parse '%s' property of node '%pOF[%d]'\n",
 			__func__, propname, np, index);
 		return ERR_PTR(ret);
 	}
 
+	pr_err("%s 1 %s\n", __func__);
+
 	chip = of_find_gpiochip_by_xlate(&gpiospec);
 	if (!chip) {
+		pr_err("%s 1 1 %s\n", __func__);
 		desc = ERR_PTR(-EPROBE_DEFER);
 		goto out;
 	}
+
+	pr_err("%s 2 %s\n", __func__);
 
 	desc = of_xlate_and_get_gpiod_flags(chip, &gpiospec, flags);
 	if (IS_ERR(desc))
@@ -275,7 +282,7 @@ static struct gpio_desc *of_get_named_gpiod_flags(struct device_node *np,
 	if (flags)
 		of_gpio_flags_quirks(np, propname, flags, index);
 
-	pr_debug("%s: parsed '%s' property of node '%pOF[%d]' - status (%d)\n",
+	pr_err("%s: parsed '%s' property of node '%pOF[%d]' - status (%d)\n",
 		 __func__, propname, np, index,
 		 PTR_ERR_OR_ZERO(desc));
 
@@ -491,6 +498,7 @@ struct gpio_desc *of_find_gpio(struct device *dev, const char *con_id,
 			snprintf(prop_name, sizeof(prop_name), "%s",
 				 gpio_suffixes[i]);
 
+		dev_err(dev, "GPIO lookup %s\n", prop_name);
 		desc = of_get_named_gpiod_flags(dev->of_node, prop_name, idx,
 						&of_flags);
 

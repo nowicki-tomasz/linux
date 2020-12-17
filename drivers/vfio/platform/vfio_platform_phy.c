@@ -22,6 +22,12 @@ int vfio_platform_phy_init(struct vfio_platform_device *vdev)
 	struct phy_devres *phy_res = &vdev->phy_res;
 	int ret;
 
+	if (!strcmp(dev_name(vdev->device), "ae94000.dsi")) {
+		dev_err(dev, "phy: skipped for dev %s\n", dev_name(vdev->device));
+		phy_res->num_phy = 0;
+		return 0;
+	}
+
 	ret = devm_phy_bulk_get_all(dev, &phy_res->phy_bulk);
 	if (ret < 0) {
 		dev_err(dev, "failed to get interconnect %d\n", ret);
@@ -66,8 +72,8 @@ int vfio_platform_phy_register_vhost(struct vfio_platform_device *vdev,
 	struct device *dev = vdev->device;
 
 	if (index > phy_res->num_phy - 1) {
-		dev_err(dev, "Index out of range (index %d > max %d)\n",
-			index, phy_res->num_phy - 1);
+		dev_err(dev, "%s: Index out of range (index %d > max %d)\n",
+			__func__, index, phy_res->num_phy - 1);
 		return -EINVAL;
 	}
 
@@ -118,7 +124,7 @@ int vfio_platform_phy_handle_req(struct vfio_platform_device *vdev,
 	index = req->dev_idx;
 
 	if (index > vdev->phy_res.num_phy - 1) {
-		dev_err(vdev->device, "Index out of range\n");
+		dev_err(vdev->device, "%s: Index out of range\n", __func__);
 		return vfio_platform_phy_resp(req, -EINVAL,
 						    VIRTIO_VFIO_S_INVAL);
 	}

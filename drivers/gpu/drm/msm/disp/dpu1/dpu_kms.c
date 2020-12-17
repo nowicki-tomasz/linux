@@ -1141,6 +1141,15 @@ static const struct component_ops dpu_ops = {
 
 static int dpu_dev_probe(struct platform_device *pdev)
 {
+	if (!strcmp(dev_name(&pdev->dev), "ae01000.mdp")) {
+		pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s ERROR PROBE\n", __func__);
+		return -EINVAL;
+	}
+	if (of_property_read_bool(pdev->dev.of_node, "dont-probe")) {
+		dev_err(&pdev->dev, "~~~~~~~~~~~~~~~ skip driver probing\n");
+		return -EINVAL;
+	}
+
 	return component_add(&pdev->dev, &dpu_ops);
 }
 

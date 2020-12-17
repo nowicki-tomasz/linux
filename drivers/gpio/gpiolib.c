@@ -4606,12 +4606,12 @@ struct gpio_desc *__must_check gpiod_get_index(struct device *dev,
 	/* Maybe we have a device name, maybe not */
 	const char *devname = dev ? dev_name(dev) : "?";
 
-	dev_dbg(dev, "GPIO lookup for consumer %s\n", con_id);
+	dev_err(dev, "GPIO lookup for consumer %s\n", con_id);
 
 	if (dev) {
 		/* Using device tree? */
 		if (IS_ENABLED(CONFIG_OF) && dev->of_node) {
-			dev_dbg(dev, "using device tree for GPIO lookup\n");
+			dev_err(dev, "using device tree for GPIO lookup\n");
 			desc = of_find_gpio(dev, con_id, idx, &lookupflags);
 		} else if (ACPI_COMPANION(dev)) {
 			dev_dbg(dev, "using ACPI for GPIO lookup\n");
@@ -4624,12 +4624,12 @@ struct gpio_desc *__must_check gpiod_get_index(struct device *dev,
 	 * a result. In that case, use platform lookup as a fallback.
 	 */
 	if (!desc || desc == ERR_PTR(-ENOENT)) {
-		dev_dbg(dev, "using lookup tables for GPIO lookup\n");
+		dev_err(dev, "using lookup tables for GPIO lookup\n");
 		desc = gpiod_find(dev, con_id, idx, &lookupflags);
 	}
 
 	if (IS_ERR(desc)) {
-		dev_dbg(dev, "No GPIO consumer %s found\n", con_id);
+		dev_err(dev, "No GPIO consumer %s found\n", con_id);
 		return desc;
 	}
 
@@ -4932,7 +4932,7 @@ struct gpio_descs *__must_check gpiod_get_array(struct device *dev,
 		descs->ndescs++;
 	}
 	if (array_info)
-		dev_dbg(dev,
+		dev_err(dev,
 			"GPIO array info: chip=%s, size=%d, get_mask=%lx, set_mask=%lx, invert_mask=%lx\n",
 			array_info->chip->label, array_info->size,
 			*array_info->get_mask, *array_info->set_mask,
@@ -5071,9 +5071,13 @@ static int of_gpiod_bulk_init(struct device *dev,
 		memcpy(func_name, pp->name, len);
 		func_name[len] = '\0';
 
+		dev_err(dev, "gpiolib: found %s function\n", func_name);
+
 		ndescs = gpiod_count(dev, func_name);
 		if (ndescs < 0)
 			return ndescs;
+
+		dev_err(dev, "gpiolib: found ndescs %u\n", ndescs);
 
 		desc = devm_kcalloc(dev, ndescs, sizeof(*desc), GFP_KERNEL);
 		if (!desc)
@@ -5101,6 +5105,8 @@ int gpiod_bulk_get_all(struct device *dev, struct gpio_bulk_data **bulk_data)
 	if (!num_func)
 		return 0;
 
+	dev_err(dev, "gpiolib: found %d gpios\n", num_func);
+
 	gpio_bulk = devm_kcalloc(dev, num_func, sizeof(*gpio_bulk), GFP_KERNEL);
 	if (!gpio_bulk)
 		return -ENOMEM;
@@ -5120,6 +5126,8 @@ int gpiod_bulk_get_all(struct device *dev, struct gpio_bulk_data **bulk_data)
 			gpio_bulk[i].desc[j] = desc;
 		}
 	}
+
+	dev_err(dev, "gpiolib: get %d funcs successfully\n", num_func);
 
 	*bulk_data = gpio_bulk;
 

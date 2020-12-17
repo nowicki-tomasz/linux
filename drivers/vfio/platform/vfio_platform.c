@@ -52,9 +52,13 @@ static int vfio_platform_probe(struct platform_device *pdev)
 	struct vfio_platform_device *vdev;
 	int ret;
 
+	dev_err(&pdev->dev, "%s 0\n", __func__);
+
 	vdev = kzalloc(sizeof(*vdev), GFP_KERNEL);
 	if (!vdev)
 		return -ENOMEM;
+
+	dev_err(&pdev->dev, "%s 1\n", __func__);
 
 	vdev->opaque = (void *) pdev;
 	vdev->name = pdev->name;

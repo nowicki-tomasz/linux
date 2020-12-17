@@ -117,7 +117,7 @@ struct dp_display_private {
 };
 
 static const struct of_device_id dp_dt_match[] = {
-//	{.compatible = "qcom,sc7180-dp"},
+	{.compatible = "qcom,sc7180-dp"},
 	{}
 };
 
@@ -1128,6 +1128,15 @@ static int dp_display_probe(struct platform_device *pdev)
 {
 	int rc = 0;
 	struct dp_display_private *dp;
+
+	if (!strcmp(dev_name(&pdev->dev), "ae90000.displayport-controller")) {
+		pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s ERROR PROBE\n", __func__);
+		return -EINVAL;
+	}
+	if (of_property_read_bool(pdev->dev.of_node, "dont-probe")) {
+		dev_err(&pdev->dev, "~~~~~~~~~~~~~~~ skip driver probing\n");
+		return -EINVAL;
+	}
 
 	if (!pdev || !pdev->dev.of_node) {
 		DRM_ERROR("pdev not found\n");

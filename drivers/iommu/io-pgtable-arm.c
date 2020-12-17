@@ -474,10 +474,23 @@ static int arm_lpae_map(struct io_pgtable_ops *ops, unsigned long iova,
 	if (WARN_ON(!size || (size & cfg->pgsize_bitmap) != size))
 		return -EINVAL;
 
+//	pr_err("%s pre iaext 0x%lx paddr 0x%lx cfg->oas %u, iova 0x%ld\n",
+//		__func__, (long)iaext, (long)paddr, cfg->oas, (long)iova);
+
 	if (cfg->quirks & IO_PGTABLE_QUIRK_ARM_TTBR1)
 		iaext = ~iaext;
-	if (WARN_ON(iaext || paddr >> cfg->oas))
+
+//	pr_err("%s mid iaext 0x%lx paddr 0x%lx cfg->oas %u, iova 0x%ld\n",
+//			__func__, (long)iaext, (long)paddr, cfg->oas, (long)iova);
+
+	if (WARN_ON(iaext || paddr >> cfg->oas)) {
+		pr_err("%s fail pre iaext 0x%lx paddr 0x%lx cfg->oas %u, iova 0x%ld\n",
+			__func__, (long)iaext, (long)paddr, cfg->oas, (long)iova);
 		return -ERANGE;
+	}
+
+//	pr_err("%s after iaext 0x%lx paddr 0x%lx cfg->oas %u, iova 0x%ld\n",
+//			__func__, (long)iaext, (long)paddr, cfg->oas, (long)iova);
 
 	prot = arm_lpae_prot_to_pte(data, iommu_prot);
 	ret = __arm_lpae_map(data, iova, paddr, size, prot, lvl, ptep, gfp);

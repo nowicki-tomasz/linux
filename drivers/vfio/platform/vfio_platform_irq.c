@@ -174,7 +174,10 @@ static int vfio_set_trigger(struct vfio_platform_device *vdev, int index,
 {
 	struct vfio_platform_irq *irq = &vdev->irqs[index];
 	struct eventfd_ctx *trigger;
+	unsigned long flags = 0;
 	int ret;
+
+//	pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s 0\n", __func__);
 
 	if (irq->trigger) {
 		irq_clear_status_flags(irq->hwirq, IRQ_NOAUTOEN);
@@ -192,22 +195,38 @@ static int vfio_set_trigger(struct vfio_platform_device *vdev, int index,
 	if (!irq->name)
 		return -ENOMEM;
 
+//	pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s 1\n", __func__);
+
 	trigger = eventfd_ctx_fdget(fd);
 	if (IS_ERR(trigger)) {
 		kfree(irq->name);
 		return PTR_ERR(trigger);
 	}
 
+//	pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s 2\n", __func__);
+
 	irq->trigger = trigger;
 
 	irq_set_status_flags(irq->hwirq, IRQ_NOAUTOEN);
-	ret = request_irq(irq->hwirq, handler, 0, irq->name, irq);
+
+	if (irq_get_trigger_type(irq->hwirq) & IRQ_TYPE_LEVEL_MASK) {
+		if (irq_get_trigger_type(irq->hwirq) & IRQ_TYPE_LEVEL_HIGH)
+			flags = IRQF_TRIGGER_HIGH;
+		else if (irq_get_trigger_type(irq->hwirq) & IRQ_TYPE_LEVEL_LOW)
+			flags = IRQF_TRIGGER_LOW;
+	}
+
+//	pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s 3\n", __func__);
+
+	ret = request_irq(irq->hwirq, handler, flags, irq->name, irq);
 	if (ret) {
 		kfree(irq->name);
 		eventfd_ctx_put(trigger);
 		irq->trigger = NULL;
 		return ret;
 	}
+
+//	pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s 4\n", __func__);
 
 	if (!irq->masked)
 		enable_irq(irq->hwirq);
@@ -228,17 +247,25 @@ static int vfio_platform_set_irq_trigger(struct vfio_platform_device *vdev,
 	else
 		handler = vfio_irq_handler;
 
+//	pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s 0\n", __func__);
+
 	if (!count && (flags & VFIO_IRQ_SET_DATA_NONE))
 		return vfio_set_trigger(vdev, index, -1, handler);
 
+//	pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s 1\n", __func__);
+
 	if (start != 0 || count != 1)
 		return -EINVAL;
+
+//	pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s 2\n", __func__);
 
 	if (flags & VFIO_IRQ_SET_DATA_EVENTFD) {
 		int32_t fd = *(int32_t *)data;
 
 		return vfio_set_trigger(vdev, index, fd, handler);
 	}
+
+//	pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s 3\n", __func__);
 
 	if (flags & VFIO_IRQ_SET_DATA_NONE) {
 		handler(irq->hwirq, irq);

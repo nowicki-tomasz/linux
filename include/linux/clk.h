@@ -331,6 +331,9 @@ int __must_check clk_bulk_get(struct device *dev, int num_clks,
  */
 int __must_check clk_bulk_get_all(struct device *dev,
 				  struct clk_bulk_data **clks);
+int __must_check clk_bulk_get_idx(struct device *dev,
+				  struct clk_bulk_data **clks,
+				  unsigned int idx);
 
 /**
  * clk_bulk_get_optional - lookup and obtain a number of references to clock producer
@@ -397,6 +400,9 @@ int __must_check devm_clk_bulk_get_optional(struct device *dev, int num_clks,
 
 int __must_check devm_clk_bulk_get_all(struct device *dev,
 				       struct clk_bulk_data **clks);
+int __must_check devm_clk_get_idx(struct device *dev,
+				  struct clk_bulk_data **clks,
+				  unsigned int idx);
 
 /**
  * devm_clk_get - lookup and obtain a managed reference to a clock producer.
@@ -790,6 +796,13 @@ static inline int __must_check clk_bulk_get_all(struct device *dev,
 	return 0;
 }
 
+static inline int __must_check clk_bulk_get_idx(struct device *dev,
+					 struct clk_bulk_data **clks,
+					 unsigned int idx)
+{
+	return 0;
+}
+
 static inline struct clk *devm_clk_get(struct device *dev, const char *id)
 {
 	return NULL;
@@ -810,6 +823,14 @@ static inline int __must_check devm_clk_bulk_get(struct device *dev, int num_clk
 static inline int __must_check devm_clk_bulk_get_optional(struct device *dev,
 				int num_clks, struct clk_bulk_data *clks)
 {
+	return 0;
+}
+
+static inline int __must_check devm_clk_get_idx(struct device *dev,
+						struct clk_bulk_data **clks,
+						unsigned int idx)
+{
+
 	return 0;
 }
 

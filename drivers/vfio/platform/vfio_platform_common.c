@@ -270,37 +270,55 @@ static int vfio_platform_open(void *device_data)
 	if (!vdev->refcnt) {
 		const char *extra_dbg = NULL;
 
+		dev_err(vdev->device, "%s 0\n", __func__);
+
 		ret = vfio_platform_regions_init(vdev);
 		if (ret)
 			goto err_reg;
+
+		dev_err(vdev->device, "%s 1\n", __func__);
 
 		ret = vfio_platform_irq_init(vdev);
 		if (ret)
 			goto err_irq;
 
+		dev_err(vdev->device, "%s 2\n", __func__);
+
 		ret = pm_runtime_get_sync(vdev->device);
 		if (ret < 0)
 			goto err_pm;
+
+		dev_err(vdev->device, "%s 3\n", __func__);
 
 		ret = vfio_platform_clk_init(vdev);
 		if (ret < 0)
 			goto err_rst;
 
+		dev_err(vdev->device, "%s 4\n", __func__);
+
 		ret = vfio_platform_regulator_init(vdev);
 		if (ret < 0)
 			goto err_rst;
+
+		dev_err(vdev->device, "%s 5\n", __func__);
 
 		ret = vfio_platform_intercon_init(vdev);
 		if (ret < 0)
 			goto err_rst;
 
+		dev_err(vdev->device, "%s 6\n", __func__);
+
 		ret = vfio_platform_phy_init(vdev);
 		if (ret < 0)
 			goto err_rst;
 
+		dev_err(vdev->device, "%s 7\n", __func__);
+
 		ret = vfio_platform_pinctrl_init(vdev);
-				if (ret < 0)
-					goto err_rst;
+			if (ret < 0)
+				goto err_rst;
+
+		dev_err(vdev->device, "%s 8\n", __func__);
 
 		ret = vfio_platform_call_reset(vdev, &extra_dbg);
 		if (ret && vdev->reset_required) {
@@ -308,6 +326,8 @@ static int vfio_platform_open(void *device_data)
 				 ret, extra_dbg ? extra_dbg : "");
 			goto err_rst;
 		}
+
+		dev_err(vdev->device, "%s 9\n", __func__);
 	}
 
 	vdev->refcnt++;
@@ -488,6 +508,9 @@ static long vfio_platform_ioctl(void *device_data,
 		if (copy_to_user((void __user *)arg, &info, minsz))
 			return -EFAULT;
 
+//		dev_err(vdev->device, "gpiolib: func name %s pin_num %d\n",
+//			usr_data, info.pin_num);
+
 		usr_data = (const void __user *)(uintptr_t)info.usr_data;
 		return copy_to_user((void __user *)usr_data, func_name, sz) ?
 			-EFAULT : 0;
@@ -528,6 +551,9 @@ static long vfio_platform_ioctl(void *device_data,
 
 		if (gpiochip_line_is_pull_down(gc, gpio_chip_hwgpio(desc)))
 			info.flags |= VFIO_GPIO_PULL_DOWN;
+
+		dev_err(vdev->device, "gpiolib: func idx %d flags %lx\n",
+			info.index, (long)info.flags);
 
 		return copy_to_user((void __user *)arg, &info, minsz);
 
@@ -861,8 +887,12 @@ int vfio_platform_probe_common(struct vfio_platform_device *vdev,
 	struct iommu_group *group;
 	int ret;
 
+	dev_err(dev, "%s 0\n", __func__);
+
 	if (!vdev)
 		return -EINVAL;
+
+	dev_err(dev, "%s 1\n", __func__);
 
 	ret = vfio_platform_acpi_probe(vdev, dev);
 	if (ret)
@@ -870,6 +900,8 @@ int vfio_platform_probe_common(struct vfio_platform_device *vdev,
 
 	if (ret)
 		return ret;
+
+	dev_err(dev, "%s 2\n", __func__);
 
 	vdev->device = dev;
 
@@ -879,6 +911,8 @@ int vfio_platform_probe_common(struct vfio_platform_device *vdev,
 			vdev->name);
 		return ret;
 	}
+
+	dev_err(dev, "%s 3\n", __func__);
 
 	ret = vdev->of_reset(vdev);
 	if (ret) {

@@ -1172,30 +1172,30 @@ int hid_pidff_init(struct hid_device *hid);
 
 #define dbg_hid(fmt, ...)						\
 do {									\
-	if (hid_debug)							\
-		printk(KERN_DEBUG "%s: " fmt, __FILE__, ##__VA_ARGS__);	\
+	if (1)							\
+		printk(KERN_ERR "%s: " fmt, __FILE__, ##__VA_ARGS__);	\
 } while (0)
 
 #define hid_err(hid, fmt, ...)				\
 	dev_err(&(hid)->dev, fmt, ##__VA_ARGS__)
 #define hid_notice(hid, fmt, ...)			\
-	dev_notice(&(hid)->dev, fmt, ##__VA_ARGS__)
+	dev_err(&(hid)->dev, fmt, ##__VA_ARGS__)
 #define hid_warn(hid, fmt, ...)				\
-	dev_warn(&(hid)->dev, fmt, ##__VA_ARGS__)
+	dev_err(&(hid)->dev, fmt, ##__VA_ARGS__)
 #define hid_info(hid, fmt, ...)				\
-	dev_info(&(hid)->dev, fmt, ##__VA_ARGS__)
+	dev_err(&(hid)->dev, fmt, ##__VA_ARGS__)
 #define hid_dbg(hid, fmt, ...)				\
-	dev_dbg(&(hid)->dev, fmt, ##__VA_ARGS__)
+	dev_err(&(hid)->dev, fmt, ##__VA_ARGS__)
 
 #define hid_err_once(hid, fmt, ...)			\
 	dev_err_once(&(hid)->dev, fmt, ##__VA_ARGS__)
 #define hid_notice_once(hid, fmt, ...)			\
-	dev_notice_once(&(hid)->dev, fmt, ##__VA_ARGS__)
+	dev_err_once(&(hid)->dev, fmt, ##__VA_ARGS__)
 #define hid_warn_once(hid, fmt, ...)			\
-	dev_warn_once(&(hid)->dev, fmt, ##__VA_ARGS__)
+	dev_err_once(&(hid)->dev, fmt, ##__VA_ARGS__)
 #define hid_info_once(hid, fmt, ...)			\
-	dev_info_once(&(hid)->dev, fmt, ##__VA_ARGS__)
+	dev_err_once(&(hid)->dev, fmt, ##__VA_ARGS__)
 #define hid_dbg_once(hid, fmt, ...)			\
-	dev_dbg_once(&(hid)->dev, fmt, ##__VA_ARGS__)
+	dev_err_once(&(hid)->dev, fmt, ##__VA_ARGS__)
 
 #endif

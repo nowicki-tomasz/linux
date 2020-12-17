@@ -37,13 +37,19 @@ static struct vfio_group *kvm_vfio_group_get_external_user(struct file *filep)
 	struct vfio_group *vfio_group;
 	struct vfio_group *(*fn)(struct file *);
 
+	pr_err("%s 1\n", __func__);
+
 	fn = symbol_get(vfio_group_get_external_user);
 	if (!fn)
 		return ERR_PTR(-EINVAL);
 
+	pr_err("%s 2\n", __func__);
+
 	vfio_group = fn(filep);
 
 	symbol_put(vfio_group_get_external_user);
+
+	pr_err("%s 3\n", __func__);
 
 	return vfio_group;
 }
@@ -193,18 +199,27 @@ static int kvm_vfio_set_group(struct kvm_device *dev, long attr, u64 arg)
 
 	switch (attr) {
 	case KVM_DEV_VFIO_GROUP_ADD:
+
+		pr_err("%s 0\n", __func__);
+
 		if (get_user(fd, argp))
 			return -EFAULT;
+
+		pr_err("%s 1\n", __func__);
 
 		f = fdget(fd);
 		if (!f.file)
 			return -EBADF;
+
+		pr_err("%s 2\n", __func__);
 
 		vfio_group = kvm_vfio_group_get_external_user(f.file);
 		fdput(f);
 
 		if (IS_ERR(vfio_group))
 			return PTR_ERR(vfio_group);
+
+		pr_err("%s 3\n", __func__);
 
 		mutex_lock(&kv->lock);
 
@@ -216,12 +231,16 @@ static int kvm_vfio_set_group(struct kvm_device *dev, long attr, u64 arg)
 			}
 		}
 
+		pr_err("%s 4\n", __func__);
+
 		kvg = kzalloc(sizeof(*kvg), GFP_KERNEL_ACCOUNT);
 		if (!kvg) {
 			mutex_unlock(&kv->lock);
 			kvm_vfio_group_put_external_user(vfio_group);
 			return -ENOMEM;
 		}
+
+		pr_err("%s 5\n", __func__);
 
 		list_add_tail(&kvg->node, &kv->group_list);
 		kvg->vfio_group = vfio_group;
@@ -233,6 +252,8 @@ static int kvm_vfio_set_group(struct kvm_device *dev, long attr, u64 arg)
 		kvm_vfio_group_set_kvm(vfio_group, dev->kvm);
 
 		kvm_vfio_update_coherency(dev);
+
+		pr_err("%s 6\n", __func__);
 
 		return 0;
 

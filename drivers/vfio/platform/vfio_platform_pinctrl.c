@@ -19,7 +19,7 @@
 
 #include "vfio_platform_private.h"
 
-static int pinctrl_init(struct vfio_platform_device *vdev)
+static int __maybe_unused pinctrl_init(struct vfio_platform_device *vdev)
 {
 	struct device *dev = vdev->device;
 	struct pinctrl_devres *pinctrl_res = &vdev->pinctrl_res;
@@ -31,6 +31,9 @@ static int pinctrl_init(struct vfio_platform_device *vdev)
 		if (ret != -ENODEV) {
 			dev_err(dev, "failed to get pinctrl %d\n", ret);
 			return ret;
+		} else {
+			pinctrl_res->num_pinctrl = 0;
+			return 0;
 		}
 	}
 	pinctrl_res->num_pinctrl = pinctrl_count_state(pinctrl_res->pinctrl);
@@ -42,6 +45,12 @@ static int gpio_init(struct vfio_platform_device *vdev)
 	struct device *dev = vdev->device;
 	struct pinctrl_devres *pinctrl_res = &vdev->pinctrl_res;
 	int ret;
+
+	if (!strcmp(dev_name(vdev->device), "panel")) {
+		dev_err(dev, "gpiolib: skipped for dev %s\n", dev_name(vdev->device));
+		pinctrl_res->num_gpio_func = 0;
+		return 0;
+	}
 
 	ret = devm_gpiod_bulk_get_all(dev, &pinctrl_res->gpio_bulk);
 	if (ret < 0) {
@@ -59,6 +68,11 @@ int vfio_platform_pinctrl_init(struct vfio_platform_device *vdev)
 
 	if (pinctrl_init(vdev) || gpio_init(vdev))
 		return -ENXIO;
+//	if (gpio_init(vdev))
+//		return -ENXIO;
+
+	dev_err(dev, "gpiolib: found pinctrl_res->num_pinctrl %d && pinctrl_res->num_gpio_func %d\n",
+		pinctrl_res->num_pinctrl, pinctrl_res->num_gpio_func);
 
 	if (!pinctrl_res->num_pinctrl && !pinctrl_res->num_gpio_func)
 		return 0;
@@ -97,9 +111,10 @@ int vfio_platform_pinctrl_register_vhost(struct vfio_platform_device *vdev,
 	struct pinctrl_devres *pinctrl_res = &vdev->pinctrl_res;
 	struct device *dev = vdev->device;
 
-	if (index > pinctrl_res->num_pinctrl - 1) {
-		dev_err(dev, "Index out of range (index %d > max %d)\n",
-			index, pinctrl_res->num_pinctrl - 1);
+	if ((index > pinctrl_res->num_pinctrl - 1) &&
+	    (index > pinctrl_res->num_gpio_func - 1)) {
+		dev_err(dev, "%s: Index out of range (index %d)\n",
+			__func__, index);
 		return -EINVAL;
 	}
 
@@ -159,10 +174,13 @@ int vfio_platform_pinctrl_handle_req(struct vfio_platform_device *vdev,
 	switch (req_hdr->req_type) {
 	case VIRTIO_VFIO_REQ_PINCTRL_SELECT:
 		if (index > vdev->pinctrl_res.num_pinctrl - 1) {
-			dev_err(vdev->device, "Index out of range\n");
+			dev_err(vdev->device, "%s: Index out of range\n", __func__);
 			return vfio_platform_pinctrl_resp(req, -EINVAL,
 							  VIRTIO_VFIO_S_INVAL);
 		}
+
+		dev_err(vdev->device, "VIRTIO_VFIO_REQ_PINCTRL_SELECT index %ld\n",
+			(long)index);
 
 		pinctrl = vdev->pinctrl_res.pinctrl;
 		state = pinctrl_lookup_state_idx(pinctrl, index);
@@ -178,7 +196,7 @@ int vfio_platform_pinctrl_handle_req(struct vfio_platform_device *vdev,
 		break;
 	case VIRTIO_VFIO_REQ_GPIO_DIR_IN:
 		if (index > vdev->pinctrl_res.num_gpio_func - 1) {
-			dev_err(vdev->device, "Index out of range\n");
+			dev_err(vdev->device, "%s: Index out of range\n", __func__);
 			return vfio_platform_pinctrl_resp(req, -EINVAL,
 							  VIRTIO_VFIO_S_INVAL);
 		}
@@ -191,13 +209,16 @@ int vfio_platform_pinctrl_handle_req(struct vfio_platform_device *vdev,
 		dir_input = (struct virtio_vfio_gpio_dir_input_msg *)req_msg;
 		desc = vdev->pinctrl_res.gpio_bulk[index].desc[dir_input->offset];
 
+		dev_err(vdev->device, "VIRTIO_VFIO_REQ_GPIO_DIR_IN offset %ld\n",
+			(long)dir_input->offset);
+
 		ret = gpiod_direction_input(desc);
 		if (ret)
 			dev_err(vdev->device, "gpiod_direction_input failed\n");
 		break;
 	case VIRTIO_VFIO_REQ_GPIO_DIR_OUT:
 		if (index > vdev->pinctrl_res.num_gpio_func - 1) {
-			dev_err(vdev->device, "Index out of range\n");
+			dev_err(vdev->device, "%s: Index out of range\n", __func__);
 			return vfio_platform_pinctrl_resp(req, -EINVAL,
 							  VIRTIO_VFIO_S_INVAL);
 		}
@@ -211,13 +232,16 @@ int vfio_platform_pinctrl_handle_req(struct vfio_platform_device *vdev,
 		value = dir_output->val;
 		desc = vdev->pinctrl_res.gpio_bulk[index].desc[dir_output->offset];
 
+		dev_err(vdev->device, "VIRTIO_VFIO_REQ_GPIO_DIR_OUT offset %ld value %ld\n",
+			(long)dir_output->offset, (long)value);
+
 		ret = gpiod_direction_output_raw(desc, value);
 		if (ret)
 			dev_err(vdev->device, "gpiod_direction_input failed\n");
 		break;
 	case VIRTIO_VFIO_REQ_GPIO_GET_DIR:
 		if (index > vdev->pinctrl_res.num_gpio_func - 1) {
-			dev_err(vdev->device, "Index out of range\n");
+			dev_err(vdev->device, "%s: Index out of range\n", __func__);
 			return vfio_platform_pinctrl_resp(req, -EINVAL,
 							  VIRTIO_VFIO_S_INVAL);
 		}
@@ -232,10 +256,14 @@ int vfio_platform_pinctrl_handle_req(struct vfio_platform_device *vdev,
 		desc = vdev->pinctrl_res.gpio_bulk[index].desc[dir->offset];
 
 		*return_val = gpiod_get_direction(desc);
+
+		dev_err(vdev->device, "VIRTIO_VFIO_REQ_GPIO_GET_DIR offset %ld dir %ld\n",
+			(long)dir->offset, (long)(*return_val));
+
 		break;
 	case VIRTIO_VFIO_REQ_GPIO_GET_VAL:
 		if (index > vdev->pinctrl_res.num_gpio_func - 1) {
-			dev_err(vdev->device, "Index out of range\n");
+			dev_err(vdev->device, "%s: Index out of range\n", __func__);
 			return vfio_platform_pinctrl_resp(req, -EINVAL,
 							  VIRTIO_VFIO_S_INVAL);
 		}
@@ -250,10 +278,13 @@ int vfio_platform_pinctrl_handle_req(struct vfio_platform_device *vdev,
 		desc = vdev->pinctrl_res.gpio_bulk[index].desc[pin_val->offset];
 
 		*return_val = gpiod_get_raw_value(desc);
+
+		dev_err(vdev->device, "VIRTIO_VFIO_REQ_GPIO_GET_VAL offset %ld val %ld\n",
+			(long)pin_val->offset, (long)(*return_val));
 		break;
 	case VIRTIO_VFIO_REQ_GPIO_SET_VAL:
 		if (index > vdev->pinctrl_res.num_gpio_func - 1) {
-			dev_err(vdev->device, "Index out of range\n");
+			dev_err(vdev->device, "%s: Index out of range\n", __func__);
 			return vfio_platform_pinctrl_resp(req, -EINVAL,
 							  VIRTIO_VFIO_S_INVAL);
 		}
@@ -266,17 +297,24 @@ int vfio_platform_pinctrl_handle_req(struct vfio_platform_device *vdev,
 		pin_val = (struct virtio_vfio_pinctrl_val_msg *)req_msg;
 		value = pin_val->val;
 		desc = vdev->pinctrl_res.gpio_bulk[index].desc[pin_val->offset];
+
+		dev_err(vdev->device, "VIRTIO_VFIO_REQ_GPIO_SET_VAL offset %ld val %ld\n",
+			(long)pin_val->offset, (long)value);
+
 		gpiod_set_raw_value(desc, value);
 		break;
 	case VIRTIO_VFIO_REQ_GPIO_GET_NR_DESC:
 		if (index > vdev->pinctrl_res.num_gpio_func - 1) {
-			dev_err(vdev->device, "Index out of range\n");
+			dev_err(vdev->device, "%s: Index out of range\n", __func__);
 			return vfio_platform_pinctrl_resp(req, -EINVAL,
 							  VIRTIO_VFIO_S_INVAL);
 		}
 
 		return_val = (uint64_t *)req->vq_resp;
 		*return_val = vdev->pinctrl_res.gpio_bulk[index].ndescs;
+
+		dev_err(vdev->device, "VIRTIO_VFIO_REQ_GPIO_GET_NR_DESC nr desc %ld\n",
+			(long)(*return_val));
 		break;
 	default:
 		ret = -ENOSYS;

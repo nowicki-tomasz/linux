@@ -405,6 +405,21 @@ static int of_platform_bus_create(struct device_node *bus,
 	return rc;
 }
 
+static int add_dont_probe_property(struct device_node *np)
+{
+	struct property *prop;
+
+	prop = kzalloc(sizeof(*prop), GFP_KERNEL);
+	if (!prop)
+		return -ENOMEM;
+
+	prop->name = "dont-probe";
+	prop->value = "enabled";
+	prop->length = strlen(prop->value);
+
+	return of_add_property(np, prop);
+}
+
 int of_platform_bus_create_debug(struct device_node *bus,
 				  const struct of_device_id *matches,
 				  const struct of_dev_auxdata *lookup,
@@ -415,7 +430,7 @@ int of_platform_bus_create_debug(struct device_node *bus,
 	struct platform_device *dev;
 	const char *bus_id = NULL;
 	void *platform_data = NULL;
-	int rc = 0;
+	int rc = 0, error;
 
 	/* Make sure it has a compatible property */
 	if (strict && (!of_get_property(bus, "compatible", NULL))) {
@@ -423,6 +438,11 @@ int of_platform_bus_create_debug(struct device_node *bus,
 			 __func__, bus);
 		return 0;
 	}
+
+	error = add_dont_probe_property(bus);
+	if (error)
+		pr_err("%s() - %pOF, cannot add don-probe property: error = %d\n",
+			__func__, bus, error);
 
 	/* Skip nodes for which we don't want to create devices */
 	if (unlikely(of_match_node(of_skipped_node_table, bus))) {
@@ -457,7 +477,7 @@ int of_platform_bus_create_debug(struct device_node *bus,
 
 	for_each_child_of_node(bus, child) {
 		pr_err("   create child: %pOF\n", child);
-		rc = of_platform_bus_create(child, matches, lookup, &dev->dev, strict);
+		rc = of_platform_bus_create_debug(child, matches, lookup, &dev->dev, strict);
 		if (rc) {
 			of_node_put(child);
 			break;

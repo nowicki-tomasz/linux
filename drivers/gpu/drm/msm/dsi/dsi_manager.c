@@ -73,16 +73,28 @@ static int dsi_mgr_setup_components(int id)
 	struct msm_dsi_pll *src_pll;
 	int ret;
 
+	pr_err("%s: 0\n", __func__);
+
 	if (!IS_DUAL_DSI()) {
+
+		pr_err("%s: 0 1 \n", __func__);
+
 		ret = msm_dsi_host_register(msm_dsi->host, true);
 		if (ret)
 			return ret;
+
+		pr_err("%s: 0 2\n", __func__);
 
 		msm_dsi_phy_set_usecase(msm_dsi->phy, MSM_DSI_PHY_STANDALONE);
 		src_pll = msm_dsi_phy_get_pll(msm_dsi->phy);
 		if (IS_ERR(src_pll))
 			return PTR_ERR(src_pll);
+
+		pr_err("%s: 0 3\n", __func__);
+
 		ret = msm_dsi_host_set_src_pll(msm_dsi->host, src_pll);
+
+		pr_err("%s: 0 4\n", __func__);
 	} else if (!other_dsi) {
 		ret = 0;
 	} else {
@@ -97,12 +109,20 @@ static int dsi_mgr_setup_components(int id)
 		 * because only master DSI device adds the panel to global
 		 * panel list. The panel's device is the master DSI device.
 		 */
+
+		pr_err("%s: 0 5\n", __func__);
+
 		ret = msm_dsi_host_register(slave_link_dsi->host, false);
 		if (ret)
 			return ret;
+
+		pr_err("%s: 0 6\n", __func__);
+
 		ret = msm_dsi_host_register(master_link_dsi->host, true);
 		if (ret)
 			return ret;
+
+		pr_err("%s: 0 7\n", __func__);
 
 		/* PLL0 is to drive both 2 DSI link clocks in Dual DSI mode. */
 		msm_dsi_phy_set_usecase(clk_master_dsi->phy,
@@ -112,11 +132,21 @@ static int dsi_mgr_setup_components(int id)
 		src_pll = msm_dsi_phy_get_pll(clk_master_dsi->phy);
 		if (IS_ERR(src_pll))
 			return PTR_ERR(src_pll);
+
+		pr_err("%s: 0 8\n", __func__);
+
 		ret = msm_dsi_host_set_src_pll(msm_dsi->host, src_pll);
 		if (ret)
 			return ret;
+
+		pr_err("%s: 0 9\n", __func__);
+
 		ret = msm_dsi_host_set_src_pll(other_dsi->host, src_pll);
+
+		pr_err("%s: 0 10\n", __func__);
 	}
+
+	pr_err("%s: 1\n", __func__, ret);
 
 	return ret;
 }

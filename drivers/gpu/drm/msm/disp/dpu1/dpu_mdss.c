@@ -180,11 +180,15 @@ static int dpu_mdss_enable(struct msm_mdss *mdss)
 
 	dpu_mdss_icc_request_bw(mdss);
 
+	pr_err("^^^^^^^^^^^^^^^^ %s 0 \n", __func__);
+
 	ret = msm_dss_enable_clk(mp->clk_config, mp->num_clk, true);
 	if (ret) {
 		DPU_ERROR("clock enable failed, ret:%d\n", ret);
 		return ret;
 	}
+
+	pr_err("^^^^^^^^^^^^^^^^ %s 1 \n", __func__);
 
 	/*
 	 * ubwc config is part of the "mdss" region which is not accessible
@@ -266,6 +270,8 @@ int dpu_mdss_init(struct drm_device *dev)
 	int ret = 0;
 	int irq;
 
+	pr_err(" %s 0\n", __func__);
+
 	dpu_mdss = devm_kzalloc(dev->dev, sizeof(*dpu_mdss), GFP_KERNEL);
 	if (!dpu_mdss)
 		return -ENOMEM;
@@ -282,6 +288,8 @@ int dpu_mdss_init(struct drm_device *dev)
 			return ret;
 	}
 
+	pr_err(" %s 1\n", __func__);
+
 	mp = &dpu_mdss->mp;
 	ret = msm_dss_parse_clock(pdev, mp);
 	if (ret) {
@@ -291,6 +299,8 @@ int dpu_mdss_init(struct drm_device *dev)
 
 	dpu_mdss->base.dev = dev;
 	dpu_mdss->base.funcs = &mdss_funcs;
+
+	pr_err(" %s 2\n", __func__);
 
 	ret = _dpu_mdss_irq_domain_add(dpu_mdss);
 	if (ret)
@@ -303,11 +313,15 @@ int dpu_mdss_init(struct drm_device *dev)
 	irq_set_chained_handler_and_data(irq, dpu_mdss_irq,
 					 dpu_mdss);
 
+	pr_err(" %s 3\n", __func__);
+
 	priv->mdss = &dpu_mdss->base;
 
 	pm_runtime_enable(dev->dev);
 
 	dpu_mdss_icc_request_bw(priv->mdss);
+
+	pr_err(" %s 4 %d\n", __func__, ret);
 
 	return ret;
 

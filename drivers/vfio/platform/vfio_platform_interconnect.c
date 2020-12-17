@@ -67,8 +67,8 @@ int vfio_platform_intercon_register_vhost(struct vfio_platform_device *vdev,
 	struct device *dev = vdev->device;
 
 	if (index > intercon_res->num_intercon - 1) {
-		dev_err(dev, "Index out of range (index %d > max %d)\n",
-			index, intercon_res->num_intercon - 1);
+		dev_err(dev, "%s: Index out of range (index %d > max %d)\n",
+			__func__, index, intercon_res->num_intercon - 1);
 		return -EINVAL;
 	}
 
@@ -120,7 +120,7 @@ int vfio_platform_intercon_handle_req(struct vfio_platform_device *vdev,
 	dev_err(vdev->device, "%s request index %d\n", __func__, index);
 
 	if (index > vdev->intercon_res.num_intercon - 1) {
-		dev_err(vdev->device, "Index out of range\n");
+		dev_err(vdev->device, "%s: Index out of range\n", __func__);
 		return vfio_platform_intercon_resp(req, -EINVAL,
 						    VIRTIO_VFIO_S_INVAL);
 	}

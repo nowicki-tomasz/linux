@@ -12,6 +12,39 @@
 #include <linux/of.h>
 #include <linux/slab.h>
 
+static int __must_check __of_clk_bulk_get_idx(struct device_node *np,
+					      struct clk_bulk_data *clks,
+					      unsigned idx)
+{
+	int ret;
+
+	clks->id = NULL;
+	clks->clk = NULL;
+
+	of_property_read_string_index(np, "clock-names", idx, &clks->id);
+	clks->clk = of_clk_get(np, idx);
+	if (IS_ERR(clks->clk)) {
+		ret = PTR_ERR(clks->clk);
+		pr_err("%pOF: Failed to get clk index: %d ret: %d\n",
+		       np, idx, ret);
+		clks->clk = NULL;
+		goto err;
+	} else if (clks->clk == NULL) {
+		pr_err("%pOF: Failed2 to get clk index: %d \n",
+					       np, idx);
+	} else {
+		pr_err("%pOF: Get clk name %s index: %d \n",
+			np, clks->id, idx);
+	}
+
+	return 0;
+
+err:
+	clk_put(clks->clk);
+	clks->clk = NULL;
+	return ret;
+}
+
 static int __must_check of_clk_bulk_get(struct device_node *np, int num_clks,
 					struct clk_bulk_data *clks)
 {
@@ -32,6 +65,12 @@ static int __must_check of_clk_bulk_get(struct device_node *np, int num_clks,
 			       np, i, ret);
 			clks[i].clk = NULL;
 			goto err;
+		} else if (clks[i].clk == NULL) {
+			pr_err("%pOF: Failed2 to get clk index: %d \n",
+						       np, i);
+		} else {
+			pr_err("%pOF: Get clk name %s index: %d \n",
+				np, clks[i].id, i);
 		}
 	}
 
@@ -67,6 +106,33 @@ static int __must_check of_clk_bulk_get_all(struct device_node *np,
 	*clks = clk_bulk;
 
 	return num_clks;
+}
+
+static int __must_check of_clk_bulk_get_idx(struct device_node *np,
+					    struct clk_bulk_data **clks,
+					    unsigned int idx)
+{
+	struct clk_bulk_data *clk_bulk;
+	int num_clks;
+	int ret;
+
+	num_clks = of_clk_get_parent_count(np);
+	if (!num_clks)
+		return 0;
+
+	clk_bulk = kmalloc_array(1, sizeof(*clk_bulk), GFP_KERNEL);
+	if (!clk_bulk)
+		return -ENOMEM;
+
+	ret = __of_clk_bulk_get_idx(np, clk_bulk, idx);
+	if (ret) {
+		kfree(clk_bulk);
+		return ret;
+	}
+
+	*clks = clk_bulk;
+
+	return 1;
 }
 
 void clk_bulk_put(int num_clks, struct clk_bulk_data *clks)
@@ -147,6 +213,19 @@ int __must_check clk_bulk_get_all(struct device *dev,
 	return of_clk_bulk_get_all(np, clks);
 }
 EXPORT_SYMBOL(clk_bulk_get_all);
+
+int __must_check clk_bulk_get_idx(struct device *dev,
+				  struct clk_bulk_data **clks,
+				  unsigned int idx)
+{
+	struct device_node *np = dev_of_node(dev);
+
+	if (!np)
+		return 0;
+
+	return of_clk_bulk_get_idx(np, clks, idx);
+}
+EXPORT_SYMBOL(clk_bulk_get_idx);
 
 #ifdef CONFIG_HAVE_CLK_PREPARE
 

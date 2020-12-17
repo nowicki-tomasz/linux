@@ -634,7 +634,8 @@ static int dsi_phy_get_id(struct msm_dsi_phy *phy)
 			return i;
 	}
 
-	return -EINVAL;
+	return 0;
+//	return -EINVAL;
 }
 
 int msm_dsi_phy_init_common(struct msm_dsi_phy *phy)
@@ -661,6 +662,17 @@ static int dsi_phy_driver_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	const struct of_device_id *match;
 	int ret;
+
+	if (!strcmp(dev_name(&pdev->dev), "ae94400.dsi-phy")) {
+		pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s ERROR PROBE\n", __func__);
+		return -EINVAL;
+	}
+	if (of_property_read_bool(pdev->dev.of_node, "dont-probe")) {
+		dev_err(&pdev->dev, "~~~~~~~~~~~~~~~ skip driver probing\n");
+		return -EINVAL;
+	}
+
+	pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s PROBE\n", __func__);
 
 	phy = devm_kzalloc(dev, sizeof(*phy), GFP_KERNEL);
 	if (!phy)
@@ -726,6 +738,8 @@ static int dsi_phy_driver_probe(struct platform_device *pdev)
 	dsi_phy_disable_resource(phy);
 
 	platform_set_drvdata(pdev, phy);
+
+	pr_err("HHHHHHHHHHHHHHHHHHHHHHHHH %s PROBE DONE\n", __func__);
 
 	return 0;
 
