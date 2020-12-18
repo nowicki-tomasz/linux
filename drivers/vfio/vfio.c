@@ -578,6 +578,9 @@ static void vfio_device_release(struct kref *kref)
 						  struct vfio_device, kref);
 	struct vfio_group *group = device->group;
 
+
+	pr_err("@@@@@@@@@@@@@@@@@@@@@@@@ %s 1\n", __func__);
+
 	list_del(&device->group_next);
 	mutex_unlock(&group->device_lock);
 
@@ -729,6 +732,8 @@ static int vfio_group_nb_add_dev(struct vfio_group *group, struct device *dev)
 {
 	struct vfio_device *device;
 
+	pr_err("@@@@@@@@@@@@@@@@@@@@@@@@ %s 1\n", __func__);
+
 	/* Do we already know about it?  We shouldn't */
 	device = vfio_group_get_device(group, dev);
 	if (WARN_ON_ONCE(device)) {
@@ -862,6 +867,8 @@ int vfio_add_group_dev(struct device *dev,
 		iommu_group_put(iommu_group);
 	}
 
+	pr_err("@@@@@@@@@@@@@@@@@@@@@@@@ %s 1\n", __func__);
+
 	device = vfio_group_get_device(group, dev);
 	if (device) {
 		dev_WARN(dev, "Device already exists on group %d\n",
@@ -904,6 +911,8 @@ struct vfio_device *vfio_device_get_from_dev(struct device *dev)
 	if (!group)
 		return NULL;
 
+	pr_err("@@@@@@@@@@@@@@@@@@@@@@@@ %s 1\n", __func__);
+
 	device = vfio_group_get_device(group, dev);
 	vfio_group_put(group);
 
@@ -916,6 +925,8 @@ static struct vfio_device *vfio_device_get_from_name(struct vfio_group *group,
 {
 	struct vfio_device *it, *device = NULL;
 
+	pr_err("%s: 0 group %px\n", __func__, group);
+
 	mutex_lock(&group->device_lock);
 	list_for_each_entry(it, &group->device_list, group_next) {
 		if (!strcmp(dev_name(it->dev), buf)) {
@@ -925,6 +936,9 @@ static struct vfio_device *vfio_device_get_from_name(struct vfio_group *group,
 		}
 	}
 	mutex_unlock(&group->device_lock);
+
+	pr_err("%s: 1 group %px device %px device->dev %px dev %px\n",
+		__func__, group, device, device->dev);
 
 	return device;
 }
@@ -988,6 +1002,9 @@ void *vfio_del_group_dev(struct device *dev)
 	add_wait_queue(&vfio.release_q, &wait);
 
 	do {
+
+		pr_err("@@@@@@@@@@@@@@@@@@@@@@@@ %s 1\n", __func__);
+
 		device = vfio_group_get_device(group, dev);
 		if (!device)
 			break;
@@ -1412,21 +1429,29 @@ static int vfio_group_set_container(struct vfio_group *group, int container_fd)
 	struct vfio_iommu_driver *driver;
 	int ret = 0;
 
+	pr_err("@@@@@@@@@@@@@@@@@@@@@@@@ %s 0\n", __func__);
+
 	if (atomic_read(&group->container_users))
 		return -EINVAL;
 
 	if (group->noiommu && !capable(CAP_SYS_RAWIO))
 		return -EPERM;
 
+	pr_err("@@@@@@@@@@@@@@@@@@@@@@@@ %s 1\n", __func__);
+
 	f = fdget(container_fd);
 	if (!f.file)
 		return -EBADF;
+
+	pr_err("@@@@@@@@@@@@@@@@@@@@@@@@ %s 2\n", __func__);
 
 	/* Sanity check, is this really our fd? */
 	if (f.file->f_op != &vfio_fops) {
 		fdput(f);
 		return -EINVAL;
 	}
+
+	pr_err("@@@@@@@@@@@@@@@@@@@@@@@@ %s 3\n", __func__);
 
 	container = f.file->private_data;
 	WARN_ON(!container); /* fget ensures we don't race vfio_release */
@@ -1440,6 +1465,8 @@ static int vfio_group_set_container(struct vfio_group *group, int container_fd)
 		goto unlock_out;
 	}
 
+	pr_err("@@@@@@@@@@@@@@@@@@@@@@@@ %s 4\n", __func__);
+
 	driver = container->iommu_driver;
 	if (driver) {
 		ret = driver->ops->attach_group(container->iommu_data,
@@ -1447,6 +1474,8 @@ static int vfio_group_set_container(struct vfio_group *group, int container_fd)
 		if (ret)
 			goto unlock_out;
 	}
+
+	pr_err("@@@@@@@@@@@@@@@@@@@@@@@@ %s 5\n", __func__);
 
 	group->container = container;
 	container->noiommu = group->noiommu;
@@ -1459,6 +1488,8 @@ static int vfio_group_set_container(struct vfio_group *group, int container_fd)
 unlock_out:
 	up_write(&container->group_lock);
 	fdput(f);
+
+	pr_err("@@@@@@@@@@@@@@@@@@@@@@@@ %s 6 ret %d\n", __func__, ret);
 	return ret;
 }
 

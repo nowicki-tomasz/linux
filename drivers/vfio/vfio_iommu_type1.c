@@ -1360,28 +1360,28 @@ unwind:
  * significantly boosts non-hugetlbfs mappings and doesn't seem to hurt when
  * hugetlbfs is in use.
  */
-static void vfio_test_domain_fgsp(struct vfio_domain *domain)
-{
-	struct page *pages;
-	int ret, order = get_order(PAGE_SIZE * 2);
-
-	pages = alloc_pages(GFP_KERNEL | __GFP_ZERO, order);
-	if (!pages)
-		return;
-
-	ret = iommu_map(domain->domain, 0, page_to_phys(pages), PAGE_SIZE * 2,
-			IOMMU_READ | IOMMU_WRITE | domain->prot);
-	if (!ret) {
-		size_t unmapped = iommu_unmap(domain->domain, 0, PAGE_SIZE);
-
-		if (unmapped == PAGE_SIZE)
-			iommu_unmap(domain->domain, PAGE_SIZE, PAGE_SIZE);
-		else
-			domain->fgsp = true;
-	}
-
-	__free_pages(pages, order);
-}
+//static void vfio_test_domain_fgsp(struct vfio_domain *domain)
+//{
+//	struct page *pages;
+//	int ret, order = get_order(PAGE_SIZE * 2);
+//
+//	pages = alloc_pages(GFP_KERNEL | __GFP_ZERO, order);
+//	if (!pages)
+//		return;
+//
+//	ret = iommu_map(domain->domain, 0, page_to_phys(pages), PAGE_SIZE * 2,
+//			IOMMU_READ | IOMMU_WRITE | domain->prot);
+//	if (!ret) {
+//		size_t unmapped = iommu_unmap(domain->domain, 0, PAGE_SIZE);
+//
+//		if (unmapped == PAGE_SIZE)
+//			iommu_unmap(domain->domain, PAGE_SIZE, PAGE_SIZE);
+//		else
+//			domain->fgsp = true;
+//	}
+//
+//	__free_pages(pages, order);
+//}
 
 static struct vfio_group *find_iommu_group(struct vfio_domain *domain,
 					   struct iommu_group *iommu_group)
@@ -1907,7 +1907,7 @@ static int vfio_iommu_type1_attach_group(void *iommu_data,
 		}
 	}
 
-	vfio_test_domain_fgsp(domain);
+//	vfio_test_domain_fgsp(domain);
 
 	/* replay mappings on new domains */
 	ret = vfio_iommu_replay(iommu, domain);

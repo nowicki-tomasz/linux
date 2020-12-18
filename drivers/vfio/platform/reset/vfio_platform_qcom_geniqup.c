@@ -311,28 +311,28 @@ module_vfio_reset_handler("qcom,adreno-gmu-618.0", vfio_platform_qcom_gmu);
 
 int vfio_platform_qcom_gpu(struct vfio_platform_device *vdev)
 {
-	struct device *dev = vdev->device;
-	struct platform_device *pdev;
-	struct device_node *node;
-
-	/*
-	 * GMU is instantiated by GPU.
-	 * Check if there is a GMU phandle and set it up.
-	 */
-	node = of_parse_phandle(dev->of_node, "qcom,gmu", 0);
-	if (!node) {
-		dev_err(dev, "%s no GMU of_node!!!\n", __func__);
-		return -ENODEV;
-	}
-
-	pdev = of_find_device_by_node(node);
-	if (!pdev) {
-		dev_err(dev, "%s no GMU platform dev!!!\n", __func__);
-		return -ENODEV;
-	}
-
-	/* Create IOMMU group which allows to assign GMU to VM */
-	of_dma_configure(&pdev->dev, node, true);
+//	struct device *dev = vdev->device;
+//	struct platform_device *pdev;
+//	struct device_node *node;
+//
+//	/*
+//	 * GMU is instantiated by GPU.
+//	 * Check if there is a GMU phandle and set it up.
+//	 */
+//	node = of_parse_phandle(dev->of_node, "qcom,gmu", 0);
+//	if (!node) {
+//		dev_err(dev, "%s no GMU of_node!!!\n", __func__);
+//		return -ENODEV;
+//	}
+//
+//	pdev = of_find_device_by_node(node);
+//	if (!pdev) {
+//		dev_err(dev, "%s no GMU platform dev!!!\n", __func__);
+//		return -ENODEV;
+//	}
+//
+//	/* Create IOMMU group which allows to assign GMU to VM */
+//	of_dma_configure(&pdev->dev, node, true);
 	return 0;
 }
 module_vfio_reset_handler("qcom,adreno-618.0", vfio_platform_qcom_gpu);
